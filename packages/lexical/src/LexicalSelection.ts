@@ -1774,6 +1774,7 @@ export class RangeSelection implements BaseSelection {
       const parent = currentElement.getParentOrThrow();
       const newElement = parent.insertNewAfter(this, false);
       if ($isElementNode(newElement)) {
+        newElement.setFormat(parent.getFormatType());
         const children = parent.getChildren();
         for (let i = 0; i < children.length; i++) {
           newElement.append(children[i]);
@@ -1786,6 +1787,7 @@ export class RangeSelection implements BaseSelection {
       // Handle as a line break insertion
       this.insertLineBreak();
     } else if ($isElementNode(newElement)) {
+      newElement.setFormat(currentElement.getFormatType());
       // If we're at the beginning of the current element, move the new element to be before the current element
       const currentElementFirstChild = currentElement.getFirstChild();
       const isBeginning =
