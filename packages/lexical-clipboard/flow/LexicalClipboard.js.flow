@@ -71,4 +71,5 @@ declare export function $generateNodesFromSerializedNodes(
 declare export function copyToClipboard(
   editor: LexicalEditor,
   event: null | ClipboardEvent,
+  ignoreDOMSelection?: boolean,
 ): Promise<boolean>;

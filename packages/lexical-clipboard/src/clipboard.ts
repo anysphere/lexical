@@ -502,6 +502,7 @@ let clipboardEventTimeout: null | number = null;
 export async function copyToClipboard(
   editor: LexicalEditor,
   event: null | ClipboardEvent,
+  ignoreDOMSelection: void | boolean,
 ): Promise<boolean> {
   if (clipboardEventTimeout !== null) {
     // Prevent weird race conditions that can happen when this function is run multiple times
@@ -511,7 +512,7 @@ export async function copyToClipboard(
   if (event !== null) {
     return new Promise((resolve, reject) => {
       editor.update(() => {
-        resolve($copyToClipboardEvent(editor, event));
+        resolve($copyToClipboardEvent(editor, event, ignoreDOMSelection));
       });
     });
   }
@@ -540,7 +541,9 @@ export async function copyToClipboard(
             window.clearTimeout(clipboardEventTimeout);
             clipboardEventTimeout = null;
           }
-          resolve($copyToClipboardEvent(editor, secondEvent));
+          resolve(
+            $copyToClipboardEvent(editor, secondEvent, ignoreDOMSelection),
+          );
         }
         // Block the entire copy flow while we wait for the next ClipboardEvent
         return true;
@@ -563,19 +566,22 @@ export async function copyToClipboard(
 function $copyToClipboardEvent(
   editor: LexicalEditor,
   event: ClipboardEvent,
+  ignoreDOMSelection: void | boolean,
 ): boolean {
-  const domSelection = window.getSelection();
-  if (!domSelection) {
-    return false;
-  }
-  const anchorDOM = domSelection.anchorNode;
-  const focusDOM = domSelection.focusNode;
-  if (
-    anchorDOM !== null &&
-    focusDOM !== null &&
-    !isSelectionWithinEditor(editor, anchorDOM, focusDOM)
-  ) {
-    return false;
+  if (ignoreDOMSelection !== true) {
+    const domSelection = window.getSelection();
+    if (!domSelection) {
+      return false;
+    }
+    const anchorDOM = domSelection.anchorNode;
+    const focusDOM = domSelection.focusNode;
+    if (
+      anchorDOM !== null &&
+      focusDOM !== null &&
+      !isSelectionWithinEditor(editor, anchorDOM, focusDOM)
+    ) {
+      return false;
+    }
   }
   event.preventDefault();
   const clipboardData = event.clipboardData;
@@ -585,16 +591,12 @@ function $copyToClipboardEvent(
   }
   const htmlString = $getHtmlContent(editor);
   const lexicalString = $getLexicalContent(editor);
-  let plainString = '';
-  if (selection !== null) {
-    plainString = selection.getTextContent();
-  }
+  clipboardData.setData('text/plain', selection.getTextContent());
   if (htmlString !== null) {
     clipboardData.setData('text/html', htmlString);
   }
   if (lexicalString !== null) {
     clipboardData.setData('application/x-lexical-editor', lexicalString);
   }
-  clipboardData.setData('text/plain', plainString);
   return true;
 }
