@@ -1156,6 +1156,7 @@ export function addRootElementEvents(
               onEvent(event, editor);
             }
           }
+          // @ts-ignore: not-all code paths return a value
         : (event: Event) => {
             if (hasStoppedLexicalPropagation(event)) {
               return;
