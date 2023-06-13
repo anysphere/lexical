@@ -93,64 +93,64 @@ export function $insertDataTransferForPlainText(
     selection.insertRawText(text);
   }
 }
-export function $insertDataTransferForRichText(
-  dataTransfer: DataTransfer,
-  selection: RangeSelection | GridSelection,
-  editor: LexicalEditor,
-): void {
-  const lexicalString = dataTransfer.getData('application/x-lexical-editor');
+// export function $insertDataTransferForRichText(
+//   dataTransfer: DataTransfer,
+//   selection: RangeSelection | GridSelection,
+//   editor: LexicalEditor,
+// ): void {
+//   const lexicalString = dataTransfer.getData('application/x-lexical-editor');
 
-  if (lexicalString) {
-    try {
-      const payload = JSON.parse(lexicalString);
-      if (
-        payload.namespace === editor._config.namespace &&
-        Array.isArray(payload.nodes)
-      ) {
-        const nodes = $generateNodesFromSerializedNodes(payload.nodes);
-        return $insertGeneratedNodes(editor, nodes, selection);
-      }
-    } catch {
-      // Fail silently.
-    }
-  }
+//   if (lexicalString) {
+//     try {
+//       const payload = JSON.parse(lexicalString);
+//       if (
+//         payload.namespace === editor._config.namespace &&
+//         Array.isArray(payload.nodes)
+//       ) {
+//         const nodes = $generateNodesFromSerializedNodes(payload.nodes);
+//         return $insertGeneratedNodes(editor, nodes, selection);
+//       }
+//     } catch {
+//       // Fail silently.
+//     }
+//   }
 
-  const htmlString = dataTransfer.getData('text/html');
-  if (htmlString) {
-    try {
-      const parser = new DOMParser();
-      const dom = parser.parseFromString(htmlString, 'text/html');
-      const nodes = $generateNodesFromDOM(editor, dom);
-      return $insertGeneratedNodes(editor, nodes, selection);
-    } catch {
-      // Fail silently.
-    }
-  }
+//   const htmlString = dataTransfer.getData('text/html');
+//   if (htmlString) {
+//     try {
+//       const parser = new DOMParser();
+//       const dom = parser.parseFromString(htmlString, 'text/html');
+//       const nodes = $generateNodesFromDOM(editor, dom);
+//       return $insertGeneratedNodes(editor, nodes, selection);
+//     } catch {
+//       // Fail silently.
+//     }
+//   }
 
-  // Multi-line plain text in rich text mode pasted as separate paragraphs
-  // instead of single paragraph with linebreaks.
-  // Webkit-specific: Supports read 'text/uri-list' in clipboard.
-  const text =
-    dataTransfer.getData('text/plain') || dataTransfer.getData('text/uri-list');
-  if (text != null) {
-    if ($isRangeSelection(selection)) {
-      const parts = text.split(/(\r?\n|\t)/);
-      const partsLength = parts.length;
-      for (let i = 0; i < partsLength; i++) {
-        const part = parts[i];
-        if (part === '\n' || part === '\r\n') {
-          selection.insertParagraph();
-        } else if (part === '\t') {
-          selection.insertNodes([$createTabNode()]);
-        } else {
-          selection.insertText(part);
-        }
-      }
-    } else {
-      selection.insertRawText(text);
-    }
-  }
-}
+//   // Multi-line plain text in rich text mode pasted as separate paragraphs
+//   // instead of single paragraph with linebreaks.
+//   // Webkit-specific: Supports read 'text/uri-list' in clipboard.
+//   const text =
+//     dataTransfer.getData('text/plain') || dataTransfer.getData('text/uri-list');
+//   if (text != null) {
+//     if ($isRangeSelection(selection)) {
+//       const parts = text.split(/(\r?\n|\t)/);
+//       const partsLength = parts.length;
+//       for (let i = 0; i < partsLength; i++) {
+//         const part = parts[i];
+//         if (part === '\n' || part === '\r\n') {
+//           selection.insertParagraph();
+//         } else if (part === '\t') {
+//           selection.insertNodes([$createTabNode()]);
+//         } else {
+//           selection.insertText(part);
+//         }
+//       }
+//     } else {
+//       selection.insertRawText(text);
+//     }
+//   }
+// }
 
 export function $insertGeneratedNodes(
   editor: LexicalEditor,
