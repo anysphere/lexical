@@ -13,7 +13,7 @@ export {
   $getHtmlContent,
   $getLexicalContent,
   $insertDataTransferForPlainText,
-  $insertDataTransferForRichText,
+  // $insertDataTransferForRichText,
   $insertGeneratedNodes,
   copyToClipboard,
 } from './clipboard';
