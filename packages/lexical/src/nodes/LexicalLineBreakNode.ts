@@ -15,7 +15,7 @@ import type {
 
 import { DOM_TEXT_TYPE } from 'packages/lexical/src/LexicalConstants';
 import { LexicalNode } from 'packages/lexical/src/LexicalNode';
-import {$applyNodeReplacement} from '../LexicalUtils';
+import { $applyNodeReplacement } from 'packages/lexical/src/LexicalUtils';
 
 export type SerializedLineBreakNode = SerializedLexicalNode;
 

@@ -20,15 +20,6 @@ import {
 } from 'shared/environment';
 
 import {
-  $getPreviousSelection,
-  $getRoot,
-  $getSelection,
-  $isElementNode,
-  $isNodeSelection,
-  $isRangeSelection,
-  $isRootNode,
-  $isTextNode,
-  $setCompositionKey,
   BLUR_COMMAND,
   CLICK_COMMAND,
   CONTROLLED_TEXT_INSERTION_COMMAND,
@@ -63,7 +54,14 @@ import {
   REMOVE_TEXT_COMMAND,
   SELECTION_CHANGE_COMMAND,
   UNDO_COMMAND,
-} from '.';
+} from './LexicalCommands';
+import { $isElementNode } from './nodes/LexicalElementNode';
+import { $isTextNode } from './nodes/LexicalTextNode';
+import { $getSelection, $isRangeSelection } from './LexicalSelection';
+import { $isRootNode } from './nodes/LexicalRootNode';
+import { $getRoot } from './LexicalUtils';
+import { $setCompositionKey } from './LexicalUtils';
+import { $isNodeSelection, $getPreviousSelection } from './LexicalSelection';
 import {KEY_MODIFIER_COMMAND} from './LexicalCommands';
 import {
   COMPOSITION_START_CHAR,

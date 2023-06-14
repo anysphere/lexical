@@ -16,14 +16,11 @@ import type {
 
 import {IS_FIREFOX} from 'shared/environment';
 
-import {
-  $getSelection,
-  $isDecoratorNode,
-  $isElementNode,
-  $isRangeSelection,
-  $isTextNode,
-  $setSelection,
-} from '.';
+import { $isDecoratorNode } from './nodes/LexicalDecoratorNode';
+import { $isElementNode } from './nodes/LexicalElementNode';
+import { $setSelection } from './LexicalUtils';
+import { $isTextNode } from './nodes/LexicalTextNode';
+import { $getSelection, $isRangeSelection } from './LexicalSelection';
 import {DOM_TEXT_TYPE} from './LexicalConstants';
 import {updateEditor} from './LexicalUpdates';
 import {

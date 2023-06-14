@@ -13,17 +13,14 @@ import type {
   NodeSelection,
   RangeSelection,
 } from './LexicalSelection';
-import type { Klass } from 'packages/lexical/src';
+import type { Klass } from './LexicalEditor';
 
 import invariant from 'shared/invariant';
 
-import {
-  $createParagraphNode,
-  $isElementNode,
-  $isRootNode,
-  $isTextNode,
-  ElementNode,
-} from '.';
+import { $createParagraphNode } from './nodes/LexicalParagraphNode';
+import { ElementNode, $isElementNode } from './nodes/LexicalElementNode';
+import { $isTextNode } from './nodes/LexicalTextNode';
+import { $isRootNode } from './nodes/LexicalRootNode';
 import {
   $getSelection,
   $isRangeSelection,
