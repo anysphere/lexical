@@ -13,10 +13,9 @@ import invariant from 'shared/invariant';
 import {
   $createListItemNode,
   $isListItemNode,
-  $isListNode,
   ListItemNode,
-  ListNode,
-} from './';
+} from './LexicalListItemNode';
+import { ListNode, $isListNode } from './LexicalListItemNode';
 
 /**
  * Checks the depth of listNode from the root node.

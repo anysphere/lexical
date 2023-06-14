@@ -8,7 +8,7 @@
  */
 
 import type {SerializedListItemNode} from './LexicalListItemNode';
-import type {ListType, SerializedListNode} from './LexicalListNode';
+import type { ListType, SerializedListNode } from './LexicalListItemNode';
 import type {LexicalCommand} from 'lexical';
 
 import {createCommand} from 'lexical';
@@ -19,7 +19,7 @@ import {
   $isListItemNode,
   ListItemNode,
 } from './LexicalListItemNode';
-import {$createListNode, $isListNode, ListNode} from './LexicalListNode';
+import { $createListNode, $isListNode, ListNode } from './LexicalListItemNode';
 import {$getListDepth} from './utils';
 
 export {
