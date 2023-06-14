@@ -21,7 +21,9 @@ import type {LexicalNode, SerializedLexicalNode} from './LexicalNode';
 
 import invariant from 'shared/invariant';
 
-import {$isElementNode, $isTextNode, SELECTION_CHANGE_COMMAND} from '.';
+import { $isElementNode } from './nodes/LexicalElementNode';
+import { $isTextNode } from './nodes/LexicalTextNode';
+import { SELECTION_CHANGE_COMMAND } from './LexicalCommands';
 import {FULL_RECONCILE, NO_DIRTY_NODES} from './LexicalConstants';
 import {resetEditor} from './LexicalEditor';
 import {

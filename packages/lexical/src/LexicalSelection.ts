@@ -13,28 +13,23 @@ import type {ElementNode} from './nodes/LexicalElementNode';
 import type {TextFormatType} from './nodes/LexicalTextNode';
 
 import invariant from 'shared/invariant';
+import { $createLineBreakNode } from './nodes/LexicalLineBreakNode';
+import { $createParagraphNode } from './nodes/LexicalParagraphNode';
+import { $createTextNode } from './nodes/LexicalTextNode';
+import { $isDecoratorNode, DecoratorNode } from './nodes/LexicalDecoratorNode';
+import { $isElementNode } from './nodes/LexicalElementNode';
+import { $isLeafNode, $setSelection } from './LexicalUtils';
+import { $isTextNode, TextNode } from './nodes/LexicalTextNode';
+import { $isLineBreakNode } from './nodes/LexicalLineBreakNode';
+import { $isRootNode } from './nodes/LexicalRootNode';
+import { DEPRECATED_$isGridCellNode } from './nodes/LexicalGridCellNode';
+import { DEPRECATED_$isGridNode } from './nodes/LexicalGridNode';
+import { DEPRECATED_$isGridRowNode } from './nodes/LexicalGridRowNode';
+import { DEPRECATED_GridCellNode } from './nodes/LexicalGridCellNode';
+import { DEPRECATED_GridNode } from './nodes/LexicalGridNode';
+import { DEPRECATED_GridRowNode } from './nodes/LexicalGridRowNode';
+import { SELECTION_CHANGE_COMMAND } from './LexicalCommands';
 
-import {
-  $createLineBreakNode,
-  $createParagraphNode,
-  $createTextNode,
-  $isDecoratorNode,
-  $isElementNode,
-  $isLeafNode,
-  $isLineBreakNode,
-  $isRootNode,
-  $isTextNode,
-  $setSelection,
-  DecoratorNode,
-  DEPRECATED_$isGridCellNode,
-  DEPRECATED_$isGridNode,
-  DEPRECATED_$isGridRowNode,
-  DEPRECATED_GridCellNode,
-  DEPRECATED_GridNode,
-  DEPRECATED_GridRowNode,
-  SELECTION_CHANGE_COMMAND,
-  TextNode,
-} from '.';
 import {DOM_ELEMENT_TYPE, TEXT_TYPE_TO_FORMAT} from './LexicalConstants';
 import {
   markCollapsedSelectionFormat,

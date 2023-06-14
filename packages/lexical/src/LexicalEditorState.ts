@@ -17,7 +17,7 @@ import type {SerializedRootNode} from './nodes/LexicalRootNode';
 
 import invariant from 'shared/invariant';
 
-import {$isElementNode} from '.';
+import { $isElementNode } from './nodes/LexicalElementNode';
 import {readEditorState} from './LexicalUpdates';
 import {$getRoot} from './LexicalUtils';
 import {$createRootNode} from './nodes/LexicalRootNode';

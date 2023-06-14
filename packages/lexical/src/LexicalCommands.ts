@@ -6,8 +6,9 @@
  *
  */
 
-import type {ElementFormatType, LexicalCommand, TextFormatType} from 'lexical';
-
+import type { ElementFormatType } from './nodes/LexicalElementNode';
+import type { LexicalCommand } from './LexicalEditor';
+import type { TextFormatType } from './nodes/LexicalTextNode';
 export type PasteCommandType = ClipboardEvent | InputEvent | KeyboardEvent;
 
 export function createCommand<T>(type?: string): LexicalCommand<T> {

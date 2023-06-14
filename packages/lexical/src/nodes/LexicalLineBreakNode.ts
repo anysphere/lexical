@@ -11,10 +11,10 @@ import type {
   DOMConversionOutput,
   NodeKey,
   SerializedLexicalNode,
-} from '../LexicalNode';
+} from 'packages/lexical/src/LexicalNode';
 
-import {DOM_TEXT_TYPE} from '../LexicalConstants';
-import {LexicalNode} from '../LexicalNode';
+import { DOM_TEXT_TYPE } from 'packages/lexical/src/LexicalConstants';
+import { LexicalNode } from 'packages/lexical/src/LexicalNode';
 import {$applyNodeReplacement} from '../LexicalUtils';
 
 export type SerializedLineBreakNode = SerializedLexicalNode;

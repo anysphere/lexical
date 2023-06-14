@@ -6,20 +6,20 @@
  *
  */
 
-import type {EditorConfig, LexicalEditor} from '../LexicalEditor';
+import type { EditorConfig, LexicalEditor } from 'packages/lexical/src/LexicalEditor';
 import type {
   DOMConversionMap,
   DOMConversionOutput,
   DOMExportOutput,
   LexicalNode,
-} from '../LexicalNode';
+} from 'packages/lexical/src/LexicalNode';
 import type {
   ElementFormatType,
   SerializedElementNode,
 } from './LexicalElementNode';
-import type {RangeSelection} from 'lexical';
+import type { RangeSelection } from 'packages/lexical/src';
 
-import {$applyNodeReplacement, getCachedClassNameArray} from '../LexicalUtils';
+import { $applyNodeReplacement, getCachedClassNameArray } from 'packages/lexical/src/LexicalUtils';
 import {ElementNode} from './LexicalElementNode';
 import {$isTextNode} from './LexicalTextNode';
 

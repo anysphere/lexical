@@ -6,7 +6,7 @@
  *
  */
 
-import type {TextNode} from '.';
+import type { TextNode } from './nodes/LexicalTextNode';
 import type {LexicalEditor} from './LexicalEditor';
 import type {
   GridSelection,

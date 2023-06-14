@@ -6,12 +6,12 @@
  *
  */
 
-import type {ElementNode} from '.';
 import type {LexicalEditor} from './LexicalEditor';
 import type {EditorState} from './LexicalEditorState';
 import type {NodeKey, NodeMap} from './LexicalNode';
+import type { ElementNode } from './nodes/LexicalElementNode'
 
-import {$isElementNode} from '.';
+import { $isElementNode } from './nodes/LexicalElementNode'
 import {cloneDecorators} from './LexicalUtils';
 
 export function $garbageCollectDetachedDecorators(

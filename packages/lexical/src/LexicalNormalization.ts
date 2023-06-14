@@ -6,10 +6,12 @@
  *
  */
 
-import type {RangeSelection, TextNode} from '.';
+import type { RangeSelection } from './LexicalSelection';
+import type { TextNode } from './nodes/LexicalTextNode';
 import type {PointType} from './LexicalSelection';
 
-import {$isElementNode, $isTextNode} from '.';
+import { $isElementNode } from './nodes/LexicalElementNode';
+import { $isTextNode } from './nodes/LexicalTextNode';
 import {getActiveEditor} from './LexicalUpdates';
 
 function $canSimpleTextNodesBeMerged(

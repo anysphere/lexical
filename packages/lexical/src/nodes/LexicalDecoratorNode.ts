@@ -6,13 +6,13 @@
  *
  */
 
-import type {LexicalEditor} from '../LexicalEditor';
-import type {NodeKey} from '../LexicalNode';
+import type { LexicalEditor } from 'packages/lexical/src/LexicalEditor';
+import type { NodeKey } from 'packages/lexical/src/LexicalNode';
 
-import {EditorConfig} from 'lexical';
+import { EditorConfig } from 'packages/lexical/src';
 import invariant from 'shared/invariant';
 
-import {LexicalNode} from '../LexicalNode';
+import { LexicalNode } from 'packages/lexical/src/LexicalNode';
 
 /** @noInheritDoc */
 export class DecoratorNode<T> extends LexicalNode {

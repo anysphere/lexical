@@ -6,18 +6,18 @@
  *
  */
 
-import type {NodeKey, SerializedLexicalNode} from '../LexicalNode';
+import type { NodeKey, SerializedLexicalNode } from 'packages/lexical/src/LexicalNode';
 import type {
   GridSelection,
   NodeSelection,
   PointType,
   RangeSelection,
-} from '../LexicalSelection';
-import type {Spread} from 'lexical';
+} from 'packages/lexical/src/LexicalSelection';
+import type { Spread } from 'packages/lexical/src';
 
 import invariant from 'shared/invariant';
 
-import {$isTextNode, TextNode} from '../';
+import { $isTextNode, TextNode } from '..';
 import {
   DOUBLE_LINE_BREAK,
   ELEMENT_FORMAT_TO_TYPE,

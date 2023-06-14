@@ -11,19 +11,19 @@ import type {
   LexicalEditor,
   Spread,
   TextNodeThemeClasses,
-} from '../LexicalEditor';
+} from 'packages/lexical/src/LexicalEditor';
 import type {
   DOMConversionMap,
   DOMConversionOutput,
   DOMExportOutput,
   NodeKey,
   SerializedLexicalNode,
-} from '../LexicalNode';
+} from 'packages/lexical/src/LexicalNode';
 import type {
   GridSelection,
   NodeSelection,
   RangeSelection,
-} from '../LexicalSelection';
+} from 'packages/lexical/src/LexicalSelection';
 
 import {IS_FIREFOX} from 'shared/environment';
 import invariant from 'shared/invariant';
@@ -48,16 +48,16 @@ import {
   TEXT_MODE_TO_TYPE,
   TEXT_TYPE_TO_FORMAT,
   TEXT_TYPE_TO_MODE,
-} from '../LexicalConstants';
-import {LexicalNode} from '../LexicalNode';
+} from 'packages/lexical/src/LexicalConstants';
+import { LexicalNode } from 'packages/lexical/src/LexicalNode';
 import {
   $getSelection,
   $isRangeSelection,
   $updateElementSelectionOnCreateDeleteNode,
   adjustPointOffsetForMergedSibling,
   internalMakeRangeSelection,
-} from '../LexicalSelection';
-import {errorOnReadOnly} from '../LexicalUpdates';
+} from 'packages/lexical/src/LexicalSelection';
+import { errorOnReadOnly } from 'packages/lexical/src/LexicalUpdates';
 import {
   $applyNodeReplacement,
   $getCompositionKey,
@@ -65,7 +65,7 @@ import {
   getCachedClassNameArray,
   internalMarkSiblingsAsDirty,
   toggleTextFormatType,
-} from '../LexicalUtils';
+} from 'packages/lexical/src/LexicalUtils';
 import {$createLineBreakNode} from './LexicalLineBreakNode';
 import {$createTabNode} from './LexicalTabNode';
 

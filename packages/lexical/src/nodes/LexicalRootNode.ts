@@ -6,14 +6,14 @@
  *
  */
 
-import type {LexicalNode, SerializedLexicalNode} from '../LexicalNode';
+import type { LexicalNode, SerializedLexicalNode } from 'packages/lexical/src/LexicalNode';
 import type {SerializedElementNode} from './LexicalElementNode';
 
 import invariant from 'shared/invariant';
 
-import {NO_DIRTY_NODES} from '../LexicalConstants';
-import {getActiveEditor, isCurrentlyReadOnlyMode} from '../LexicalUpdates';
-import {$getRoot} from '../LexicalUtils';
+import { NO_DIRTY_NODES } from 'packages/lexical/src/LexicalConstants';
+import { getActiveEditor, isCurrentlyReadOnlyMode } from 'packages/lexical/src/LexicalUpdates';
+import { $getRoot } from 'packages/lexical/src/LexicalUtils';
 import {$isDecoratorNode} from './LexicalDecoratorNode';
 import {$isElementNode, ElementNode} from './LexicalElementNode';
 

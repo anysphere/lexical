@@ -13,7 +13,7 @@ import type {
   NodeSelection,
   RangeSelection,
 } from './LexicalSelection';
-import type {Klass} from 'lexical';
+import type { Klass } from 'packages/lexical/src';
 
 import invariant from 'shared/invariant';
 

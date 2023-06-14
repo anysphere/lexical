@@ -6,13 +6,13 @@
  *
  */
 
-import type {DOMConversionMap, NodeKey} from '../LexicalNode';
+import type { DOMConversionMap, NodeKey } from 'packages/lexical/src/LexicalNode';
 
 import invariant from 'shared/invariant';
 
-import {IS_UNMERGEABLE} from '../LexicalConstants';
-import {LexicalNode} from '../LexicalNode';
-import {$applyNodeReplacement} from '../LexicalUtils';
+import { IS_UNMERGEABLE } from 'packages/lexical/src/LexicalConstants';
+import { LexicalNode } from 'packages/lexical/src/LexicalNode';
+import { $applyNodeReplacement } from 'packages/lexical/src/LexicalUtils';
 import {
   SerializedTextNode,
   TextDetailType,

@@ -6,7 +6,7 @@
  *
  */
 
-import type {LexicalNode} from '../LexicalNode';
+import type { LexicalNode } from 'packages/lexical/src/LexicalNode';
 
 import {ElementNode} from './LexicalElementNode';
 

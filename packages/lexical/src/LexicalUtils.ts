@@ -33,20 +33,15 @@ import {CAN_USE_DOM} from 'shared/canUseDOM';
 import {IS_APPLE, IS_APPLE_WEBKIT, IS_IOS, IS_SAFARI} from 'shared/environment';
 import invariant from 'shared/invariant';
 
-import {
-  $createTextNode,
-  $getPreviousSelection,
-  $getSelection,
-  $isDecoratorNode,
-  $isElementNode,
-  $isLineBreakNode,
-  $isRangeSelection,
-  $isRootNode,
-  $isTextNode,
-  DecoratorNode,
-  ElementNode,
-  LineBreakNode,
-} from '.';
+import { LineBreakNode } from './nodes/LexicalLineBreakNode';
+import { $createTextNode } from './nodes/LexicalTextNode';
+import { $getSelection, $isRangeSelection } from './LexicalSelection';
+import { $isDecoratorNode, DecoratorNode } from './nodes/LexicalDecoratorNode';
+import { $getPreviousSelection } from './LexicalSelection';
+import { ElementNode, $isElementNode } from './nodes/LexicalElementNode';
+import { $isTextNode } from './nodes/LexicalTextNode';
+import { $isLineBreakNode } from './nodes/LexicalLineBreakNode';
+import { $isRootNode } from './nodes/LexicalRootNode';
 import {
   COMPOSITION_SUFFIX,
   DOM_TEXT_TYPE,

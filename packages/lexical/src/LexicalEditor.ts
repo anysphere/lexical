@@ -11,7 +11,9 @@ import type {DOMConversion, NodeKey} from './LexicalNode';
 
 import invariant from 'shared/invariant';
 
-import {$getRoot, $getSelection, TextNode} from '.';
+import { $getRoot } from './LexicalUtils';
+import { TextNode } from './nodes/LexicalTextNode';
+import { $getSelection } from './LexicalSelection';
 import {FULL_RECONCILE, NO_DIRTY_NODES} from './LexicalConstants';
 import {createEmptyEditorState} from './LexicalEditorState';
 import {addRootElementEvents, removeRootElementEvents} from './LexicalEvents';
