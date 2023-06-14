@@ -18,13 +18,11 @@ import type {ElementNode} from './nodes/LexicalElementNode';
 
 import invariant from 'shared/invariant';
 
-import {
-  $isDecoratorNode,
-  $isElementNode,
-  $isLineBreakNode,
-  $isRootNode,
-  $isTextNode,
-} from '.';
+import { $isDecoratorNode } from './nodes/LexicalDecoratorNode';
+import { $isElementNode } from './nodes/LexicalElementNode';
+import { $isTextNode } from './nodes/LexicalTextNode';
+import { $isLineBreakNode } from './nodes/LexicalLineBreakNode';
+import { $isRootNode } from './nodes/LexicalRootNode';
 import {
   DOUBLE_LINE_BREAK,
   FULL_RECONCILE,

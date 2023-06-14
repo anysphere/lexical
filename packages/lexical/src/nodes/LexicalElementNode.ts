@@ -17,7 +17,7 @@ import type { Spread } from 'packages/lexical/src';
 
 import invariant from 'shared/invariant';
 
-import { $isTextNode, TextNode } from '..';
+import { $isTextNode, TextNode } from 'packages/lexical/src';
 import {
   DOUBLE_LINE_BREAK,
   ELEMENT_FORMAT_TO_TYPE,
