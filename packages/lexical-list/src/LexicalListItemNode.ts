@@ -6,7 +6,7 @@
  *
  */
 
-import type {ListNode} from './';
+import type { ListNode } from './LexicalListNode';
 import type {
   DOMConversionMap,
   DOMConversionOutput,
