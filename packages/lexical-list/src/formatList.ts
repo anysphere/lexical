@@ -31,8 +31,8 @@ import {
   $isListNode,
   ListItemNode,
   ListNode,
-} from './';
-import {ListType} from './LexicalListNode';
+} from './LexicalListItemNode';
+import { ListType } from './LexicalListItemNode';
 import {
   $getAllListItems,
   $getTopListNode,
