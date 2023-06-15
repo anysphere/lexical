@@ -4763,10 +4763,10 @@ export function reconcileRoot(
   // we instead set them as bindings within the scope of the module.
   treatAllNodesAsDirty = dirtyType === FULL_RECONCILE;
   activeTextDirection = null;
-  activeEditor = editor;
+  activeEditorLexicalReconcilor = editor;
   activeEditorConfig = editor._config;
   activeEditorNodes = editor._nodes;
-  activeMutationListeners = activeEditor._listeners.mutation;
+  activeMutationListeners = activeEditorLexicalReconcilor._listeners.mutation;
   activeDirtyElements = dirtyElements;
   activeDirtyLeaves = dirtyLeaves;
   activePrevNodeMap = prevEditorState._nodeMap;
@@ -4783,7 +4783,7 @@ export function reconcileRoot(
   // We also want to make sure we clear them down, otherwise we
   // can leak memory.
   // @ts-ignore
-  activeEditor = undefined;
+  activeEditorLexicalReconcilor = undefined;
   // @ts-ignore
   activeEditorNodes = undefined;
   // @ts-ignore
