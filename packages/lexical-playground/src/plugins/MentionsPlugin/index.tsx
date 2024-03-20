@@ -590,11 +590,13 @@ function getPossibleQueryMatch(text: string): MenuTextMatch | null {
 class MentionTypeaheadOption extends MenuOption {
   name: string;
   picture: JSX.Element;
+  size?:number;
 
-  constructor(name: string, picture: JSX.Element) {
+  constructor(name: string, picture: JSX.Element,size?:number) {
     super(name);
     this.name = name;
     this.picture = picture;
+    this.size = size;
   }
 }
 
@@ -628,6 +630,7 @@ function MentionsTypeaheadMenuItem({
       onClick={onClick}>
       {option.picture}
       <span className="text">{option.name}</span>
+      <span>{option.size}</span>
     </li>
   );
 }
