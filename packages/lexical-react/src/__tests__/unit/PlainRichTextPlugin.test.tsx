@@ -6,13 +6,16 @@
  *
  */
 
-import {CodeHighlightNode, CodeNode} from '@lexical/code';
 import {HashtagNode} from '@lexical/hashtag';
 import {AutoLinkNode, LinkNode} from '@lexical/link';
 import {ListItemNode, ListNode} from '@lexical/list';
 import {OverflowNode} from '@lexical/overflow';
-import {useLexicalComposerContext} from '@lexical/react/src/LexicalComposerContext';
-import LexicalErrorBoundary from '@lexical/react/src/LexicalErrorBoundary';
+import {LexicalComposer} from '@lexical/react/LexicalComposer';
+import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
+import {ContentEditable} from '@lexical/react/LexicalContentEditable';
+import {LexicalErrorBoundary} from '@lexical/react/LexicalErrorBoundary';
+import {PlainTextPlugin} from '@lexical/react/LexicalPlainTextPlugin';
+import {RichTextPlugin} from '@lexical/react/LexicalRichTextPlugin';
 import {HeadingNode, QuoteNode} from '@lexical/rich-text';
 import {TableCellNode, TableNode, TableRowNode} from '@lexical/table';
 import {$rootTextContent} from '@lexical/text';
@@ -21,36 +24,30 @@ import {
   $createTextNode,
   $getRoot,
   $getSelection,
-  $isNodeSelection,
+  $isRangeSelection,
+  LexicalEditor,
 } from 'lexical';
 import * as React from 'react';
-import {createRoot} from 'react-dom/client';
-import * as ReactTestUtils from 'react-dom/test-utils';
-
-import {LexicalComposer} from '../../LexicalComposer';
-import {ContentEditable} from '../../LexicalContentEditable';
-import {PlainTextPlugin} from '../../LexicalPlainTextPlugin';
-import {RichTextPlugin} from '../../LexicalRichTextPlugin';
+import {createRoot, Root} from 'react-dom/client';
+import * as ReactTestUtils from 'shared/react-test-utils';
 
 const RICH_TEXT_NODES = [
   HeadingNode,
   ListNode,
   ListItemNode,
   QuoteNode,
-  CodeNode,
   TableNode,
   TableCellNode,
   TableRowNode,
   HashtagNode,
-  CodeHighlightNode,
   AutoLinkNode,
   LinkNode,
   OverflowNode,
 ];
 
 describe('LexicalNodeHelpers tests', () => {
-  let container = null;
-  let reactRoot;
+  let container: HTMLDivElement | null = null;
+  let reactRoot: Root;
 
   beforeEach(() => {
     container = document.createElement('div');
@@ -59,7 +56,7 @@ describe('LexicalNodeHelpers tests', () => {
   });
 
   afterEach(() => {
-    document.body.removeChild(container);
+    document.body.removeChild(container!);
     container = null;
 
     jest.restoreAllMocks();
@@ -114,7 +111,7 @@ describe('LexicalNodeHelpers tests', () => {
         reactRoot.render(<App />);
       });
 
-      const text = editor.getEditorState().read($rootTextContent);
+      const text = editor!.getEditorState().read($rootTextContent);
       expect(text).toBe('foo');
     });
   }
@@ -165,14 +162,14 @@ describe('LexicalNodeHelpers tests', () => {
         reactRoot.render(<App />);
       });
 
-      await editor.focus();
+      await editor!.focus();
 
-      await editor.getEditorState().read(() => {
+      await editor!.getEditorState().read(() => {
         expect($rootTextContent()).toBe('foo');
 
         const selection = $getSelection();
 
-        if ($isNodeSelection(selection)) {
+        if (!$isRangeSelection(selection)) {
           return;
         }
 
@@ -184,7 +181,7 @@ describe('LexicalNodeHelpers tests', () => {
 
   for (const plugin of ['PlainTextPlugin', 'RichTextPlugin']) {
     it(`${plugin} can hide placeholder when non-editable`, async () => {
-      let editor;
+      let editor: LexicalEditor;
 
       function GrabEditor() {
         [editor] = useLexicalComposerContext();
@@ -233,7 +230,7 @@ describe('LexicalNodeHelpers tests', () => {
       });
 
       function placeholderText() {
-        const placeholderContainer = container.querySelector('.placeholder');
+        const placeholderContainer = container!.querySelector('.placeholder');
         return placeholderContainer && placeholderContainer.textContent;
       }
 

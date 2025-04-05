@@ -6,21 +6,21 @@
  *
  */
 
-import type {
-  LexicalCommand,
-  LexicalEditor,
-  LexicalNode,
-  RangeSelection,
-} from 'lexical';
+import type {LexicalCommand, LexicalEditor, RangeSelection} from 'lexical';
 
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
-import {$getNearestBlockElementAncestorOrThrow} from '@lexical/utils';
+import {
+  $filter,
+  $getNearestBlockElementAncestorOrThrow,
+  mergeRegister,
+} from '@lexical/utils';
 import {
   $createRangeSelection,
   $getSelection,
   $isBlockElementNode,
   $isRangeSelection,
   $normalizeSelection__EXPERIMENTAL,
+  COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_EDITOR,
   INDENT_CONTENT_COMMAND,
   INSERT_TAB_COMMAND,
@@ -29,22 +29,7 @@ import {
 } from 'lexical';
 import {useEffect} from 'react';
 
-// TODO Move to @lexical/utils
-function $filter<T>(
-  nodes: Array<LexicalNode>,
-  filterFn: (node: LexicalNode) => null | T,
-): Array<T> {
-  const result: T[] = [];
-  for (let i = 0; i < nodes.length; i++) {
-    const node = filterFn(nodes[i]);
-    if (node !== null) {
-      result.push(node);
-    }
-  }
-  return result;
-}
-
-function indentOverTab(selection: RangeSelection): boolean {
+function $indentOverTab(selection: RangeSelection): boolean {
   // const handled = new Set();
   const nodes = selection.getNodes();
   const canIndentBlockNodes = $filter(nodes, (node) => {
@@ -77,24 +62,51 @@ function indentOverTab(selection: RangeSelection): boolean {
   return false;
 }
 
-export function registerTabIndentation(editor: LexicalEditor) {
-  return editor.registerCommand<KeyboardEvent>(
-    KEY_TAB_COMMAND,
-    (event) => {
-      const selection = $getSelection();
-      if (!$isRangeSelection(selection)) {
-        return false;
-      }
+export function registerTabIndentation(
+  editor: LexicalEditor,
+  maxIndent?: number,
+) {
+  return mergeRegister(
+    editor.registerCommand<KeyboardEvent>(
+      KEY_TAB_COMMAND,
+      (event) => {
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return false;
+        }
+        event.preventDefault();
+        const command: LexicalCommand<void> = $indentOverTab(selection)
+          ? event.shiftKey
+            ? OUTDENT_CONTENT_COMMAND
+            : INDENT_CONTENT_COMMAND
+          : INSERT_TAB_COMMAND;
+        return editor.dispatchCommand(command, undefined);
+      },
+      COMMAND_PRIORITY_EDITOR,
+    ),
 
-      event.preventDefault();
-      const command: LexicalCommand<void> = indentOverTab(selection)
-        ? event.shiftKey
-          ? OUTDENT_CONTENT_COMMAND
-          : INDENT_CONTENT_COMMAND
-        : INSERT_TAB_COMMAND;
-      return editor.dispatchCommand(command, undefined);
-    },
-    COMMAND_PRIORITY_EDITOR,
+    editor.registerCommand(
+      INDENT_CONTENT_COMMAND,
+      () => {
+        if (maxIndent == null) {
+          return false;
+        }
+
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          return false;
+        }
+
+        const indents = selection
+          .getNodes()
+          .map((node) =>
+            $getNearestBlockElementAncestorOrThrow(node).getIndent(),
+          );
+
+        return Math.max(...indents) + 1 >= maxIndent;
+      },
+      COMMAND_PRIORITY_CRITICAL,
+    ),
   );
 }
 
@@ -103,11 +115,11 @@ export function registerTabIndentation(editor: LexicalEditor) {
  * recommend using this plugin as it could negatively affect acessibility for keyboard
  * users, causing focus to become trapped within the editor.
  */
-export function TabIndentationPlugin(): null {
+export function TabIndentationPlugin({maxIndent}: {maxIndent?: number}): null {
   const [editor] = useLexicalComposerContext();
   useEffect(() => {
-    return registerTabIndentation(editor);
-  });
+    return registerTabIndentation(editor, maxIndent);
+  }, [editor, maxIndent]);
 
   return null;
 }

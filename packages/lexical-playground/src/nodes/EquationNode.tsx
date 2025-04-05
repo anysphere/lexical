@@ -15,16 +15,13 @@ import type {
   SerializedLexicalNode,
   Spread,
 } from 'lexical';
+import type {JSX} from 'react';
 
 import katex from 'katex';
 import {$applyNodeReplacement, DecoratorNode, DOMExportOutput} from 'lexical';
 import * as React from 'react';
-import {Suspense} from 'react';
 
-const EquationComponent = React.lazy(
-  // @ts-ignore
-  () => import('./EquationComponent'),
-);
+const EquationComponent = React.lazy(() => import('./EquationComponent'));
 
 export type SerializedEquationNode = Spread<
   {
@@ -34,7 +31,7 @@ export type SerializedEquationNode = Spread<
   SerializedLexicalNode
 >;
 
-function convertEquationElement(
+function $convertEquationElement(
   domNode: HTMLElement,
 ): null | DOMConversionOutput {
   let equation = domNode.getAttribute('data-lexical-equation');
@@ -68,19 +65,17 @@ export class EquationNode extends DecoratorNode<JSX.Element> {
   }
 
   static importJSON(serializedNode: SerializedEquationNode): EquationNode {
-    const node = $createEquationNode(
+    return $createEquationNode(
       serializedNode.equation,
       serializedNode.inline,
-    );
-    return node;
+    ).updateFromJSON(serializedNode);
   }
 
   exportJSON(): SerializedEquationNode {
     return {
+      ...super.exportJSON(),
       equation: this.getEquation(),
       inline: this.__inline,
-      type: 'equation',
-      version: 1,
     };
   }
 
@@ -115,7 +110,7 @@ export class EquationNode extends DecoratorNode<JSX.Element> {
           return null;
         }
         return {
-          conversion: convertEquationElement,
+          conversion: $convertEquationElement,
           priority: 2,
         };
       },
@@ -124,14 +119,14 @@ export class EquationNode extends DecoratorNode<JSX.Element> {
           return null;
         }
         return {
-          conversion: convertEquationElement,
+          conversion: $convertEquationElement,
           priority: 1,
         };
       },
     };
   }
 
-  updateDOM(prevNode: EquationNode): boolean {
+  updateDOM(prevNode: this): boolean {
     // If the inline property changes, replace the element
     return this.__inline !== prevNode.__inline;
   }
@@ -151,13 +146,11 @@ export class EquationNode extends DecoratorNode<JSX.Element> {
 
   decorate(): JSX.Element {
     return (
-      <Suspense fallback={null}>
-        <EquationComponent
-          equation={this.__equation}
-          inline={this.__inline}
-          nodeKey={this.__key}
-        />
-      </Suspense>
+      <EquationComponent
+        equation={this.__equation}
+        inline={this.__inline}
+        nodeKey={this.__key}
+      />
     );
   }
 }

@@ -6,31 +6,32 @@
  *
  */
 
-import type {Spread} from 'lexical';
+import type {BaseSelection, LexicalUpdateJSON, Spread} from 'lexical';
 
-import {addClassNamesToElement} from '@lexical/utils';
+import {$descendantsMatching, addClassNamesToElement} from '@lexical/utils';
 import {
   $applyNodeReplacement,
-  DEPRECATED_GridRowNode,
   DOMConversionMap,
   DOMConversionOutput,
   EditorConfig,
+  ElementNode,
   LexicalNode,
   NodeKey,
   SerializedElementNode,
 } from 'lexical';
 
 import {PIXEL_VALUE_REG_EXP} from './constants';
+import {$isTableCellNode} from './LexicalTableCellNode';
 
 export type SerializedTableRowNode = Spread<
   {
-    height: number;
+    height?: number;
   },
   SerializedElementNode
 >;
 
 /** @noInheritDoc */
-export class TableRowNode extends DEPRECATED_GridRowNode {
+export class TableRowNode extends ElementNode {
   /** @internal */
   __height?: number;
 
@@ -45,14 +46,22 @@ export class TableRowNode extends DEPRECATED_GridRowNode {
   static importDOM(): DOMConversionMap | null {
     return {
       tr: (node: Node) => ({
-        conversion: convertTableRowElement,
+        conversion: $convertTableRowElement,
         priority: 0,
       }),
     };
   }
 
   static importJSON(serializedNode: SerializedTableRowNode): TableRowNode {
-    return $createTableRowNode(serializedNode.height);
+    return $createTableRowNode().updateFromJSON(serializedNode);
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedTableRowNode>,
+  ): this {
+    return super
+      .updateFromJSON(serializedNode)
+      .setHeight(serializedNode.height);
   }
 
   constructor(height?: number, key?: NodeKey) {
@@ -60,11 +69,11 @@ export class TableRowNode extends DEPRECATED_GridRowNode {
     this.__height = height;
   }
 
-  exportJSON(): SerializedElementNode {
+  exportJSON(): SerializedTableRowNode {
+    const height = this.getHeight();
     return {
       ...super.exportJSON(),
-      type: 'tablerow',
-      version: 1,
+      ...(height === undefined ? undefined : {height}),
     };
   }
 
@@ -80,21 +89,29 @@ export class TableRowNode extends DEPRECATED_GridRowNode {
     return element;
   }
 
+  extractWithChild(
+    child: LexicalNode,
+    selection: BaseSelection | null,
+    destination: 'clone' | 'html',
+  ): boolean {
+    return destination === 'html';
+  }
+
   isShadowRoot(): boolean {
     return true;
   }
 
-  setHeight(height: number): number | null | undefined {
+  setHeight(height?: number | undefined): this {
     const self = this.getWritable();
     self.__height = height;
-    return this.__height;
+    return self;
   }
 
-  getHeight(): number | null | undefined {
+  getHeight(): number | undefined {
     return this.getLatest().__height;
   }
 
-  updateDOM(prevNode: TableRowNode): boolean {
+  updateDOM(prevNode: this): boolean {
     return prevNode.__height !== this.__height;
   }
 
@@ -107,7 +124,7 @@ export class TableRowNode extends DEPRECATED_GridRowNode {
   }
 }
 
-export function convertTableRowElement(domNode: Node): DOMConversionOutput {
+export function $convertTableRowElement(domNode: Node): DOMConversionOutput {
   const domNode_ = domNode as HTMLTableCellElement;
   let height: number | undefined = undefined;
 
@@ -115,7 +132,10 @@ export function convertTableRowElement(domNode: Node): DOMConversionOutput {
     height = parseFloat(domNode_.style.height);
   }
 
-  return {node: $createTableRowNode(height)};
+  return {
+    after: (children) => $descendantsMatching(children, $isTableCellNode),
+    node: $createTableRowNode(height),
+  };
 }
 
 export function $createTableRowNode(height?: number): TableRowNode {

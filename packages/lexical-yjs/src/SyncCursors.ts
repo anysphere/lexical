@@ -7,14 +7,7 @@
  */
 
 import type {Binding} from './Bindings';
-import type {
-  GridSelection,
-  NodeKey,
-  NodeMap,
-  NodeSelection,
-  Point,
-  RangeSelection,
-} from 'lexical';
+import type {BaseSelection, NodeKey, NodeMap, Point} from 'lexical';
 import type {AbsolutePosition, RelativePosition} from 'yjs';
 
 import {createDOMRange, createRectsFromDOMRange} from '@lexical/selection';
@@ -26,13 +19,14 @@ import {
   $isRangeSelection,
   $isTextNode,
 } from 'lexical';
+import invariant from 'shared/invariant';
 import {
   compareRelativePositions,
   createAbsolutePositionFromRelativePosition,
   createRelativePositionFromTypeIndex,
 } from 'yjs';
 
-import {Provider} from '.';
+import {Provider, UserState} from '.';
 import {CollabDecoratorNode} from './CollabDecoratorNode';
 import {CollabElementNode} from './CollabElementNode';
 import {CollabLineBreakNode} from './CollabLineBreakNode';
@@ -87,6 +81,7 @@ function createRelativePosition(
     point.type === 'element'
   ) {
     const parent = point.getNode();
+    invariant($isElementNode(parent), 'Element point must be an element node');
     let accumulatedOffset = 0;
     let i = 0;
     let node = parent.getFirstChild();
@@ -300,7 +295,48 @@ function updateCursor(
   }
 }
 
-export function syncLocalCursorPosition(
+type AnyCollabNode =
+  | CollabDecoratorNode
+  | CollabElementNode
+  | CollabTextNode
+  | CollabLineBreakNode;
+
+export function getAnchorAndFocusCollabNodesForUserState(
+  binding: Binding,
+  userState: UserState,
+) {
+  const {anchorPos, focusPos} = userState;
+
+  let anchorCollabNode: AnyCollabNode | null = null;
+  let anchorOffset = 0;
+  let focusCollabNode: AnyCollabNode | null = null;
+  let focusOffset = 0;
+
+  if (anchorPos !== null && focusPos !== null) {
+    const anchorAbsPos = createAbsolutePosition(anchorPos, binding);
+    const focusAbsPos = createAbsolutePosition(focusPos, binding);
+
+    if (anchorAbsPos !== null && focusAbsPos !== null) {
+      [anchorCollabNode, anchorOffset] = getCollabNodeAndOffset(
+        anchorAbsPos.type,
+        anchorAbsPos.index,
+      );
+      [focusCollabNode, focusOffset] = getCollabNodeAndOffset(
+        focusAbsPos.type,
+        focusAbsPos.index,
+      );
+    }
+  }
+
+  return {
+    anchorCollabNode,
+    anchorOffset,
+    focusCollabNode,
+    focusOffset,
+  };
+}
+
+export function $syncLocalCursorPosition(
   binding: Binding,
   provider: Provider,
 ): void {
@@ -311,43 +347,25 @@ export function syncLocalCursorPosition(
     return;
   }
 
-  const anchorPos = localState.anchorPos;
-  const focusPos = localState.focusPos;
+  const {anchorCollabNode, anchorOffset, focusCollabNode, focusOffset} =
+    getAnchorAndFocusCollabNodesForUserState(binding, localState);
 
-  if (anchorPos !== null && focusPos !== null) {
-    const anchorAbsPos = createAbsolutePosition(anchorPos, binding);
-    const focusAbsPos = createAbsolutePosition(focusPos, binding);
+  if (anchorCollabNode !== null && focusCollabNode !== null) {
+    const anchorKey = anchorCollabNode.getKey();
+    const focusKey = focusCollabNode.getKey();
 
-    if (anchorAbsPos !== null && focusAbsPos !== null) {
-      const [anchorCollabNode, anchorOffset] = getCollabNodeAndOffset(
-        anchorAbsPos.type,
-        anchorAbsPos.index,
-      );
-      const [focusCollabNode, focusOffset] = getCollabNodeAndOffset(
-        focusAbsPos.type,
-        focusAbsPos.index,
-      );
+    const selection = $getSelection();
 
-      if (anchorCollabNode !== null && focusCollabNode !== null) {
-        const anchorKey = anchorCollabNode.getKey();
-        const focusKey = focusCollabNode.getKey();
-
-        const selection = $getSelection();
-
-        if (!$isRangeSelection(selection)) {
-          return;
-        }
-        const anchor = selection.anchor;
-        const focus = selection.focus;
-
-        setPoint(anchor, anchorKey, anchorOffset);
-        setPoint(focus, focusKey, focusOffset);
-      }
+    if (!$isRangeSelection(selection)) {
+      return;
     }
+
+    $setPoint(selection.anchor, anchorKey, anchorOffset);
+    $setPoint(selection.focus, focusKey, focusOffset);
   }
 }
 
-function setPoint(point: Point, key: NodeKey, offset: number): void {
+function $setPoint(point: Point, key: NodeKey, offset: number): void {
   if (point.key !== key || point.offset !== offset) {
     let anchorNode = $getNodeByKey(key);
     if (
@@ -368,16 +386,7 @@ function getCollabNodeAndOffset(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   sharedType: any,
   offset: number,
-): [
-  (
-    | null
-    | CollabDecoratorNode
-    | CollabElementNode
-    | CollabTextNode
-    | CollabLineBreakNode
-  ),
-  number,
-] {
+): [null | AnyCollabNode, number] {
   const collabNode = sharedType._collabNode;
 
   if (collabNode === undefined) {
@@ -401,6 +410,11 @@ function getCollabNodeAndOffset(
   return [null, 0];
 }
 
+export type SyncCursorPositionsFn = (
+  binding: Binding,
+  provider: Provider,
+) => void;
+
 export function syncCursorPositions(
   binding: Binding,
   provider: Provider,
@@ -418,7 +432,7 @@ export function syncCursorPositions(
 
     if (clientID !== localClientID) {
       visitedClientIDs.add(clientID);
-      const {anchorPos, focusPos, name, color, focusing} = awareness;
+      const {name, color, focusing} = awareness;
       let selection = null;
 
       let cursor = cursors.get(clientID);
@@ -428,41 +442,30 @@ export function syncCursorPositions(
         cursors.set(clientID, cursor);
       }
 
-      if (anchorPos !== null && focusPos !== null && focusing) {
-        const anchorAbsPos = createAbsolutePosition(anchorPos, binding);
-        const focusAbsPos = createAbsolutePosition(focusPos, binding);
+      if (focusing) {
+        const {anchorCollabNode, anchorOffset, focusCollabNode, focusOffset} =
+          getAnchorAndFocusCollabNodesForUserState(binding, awareness);
 
-        if (anchorAbsPos !== null && focusAbsPos !== null) {
-          const [anchorCollabNode, anchorOffset] = getCollabNodeAndOffset(
-            anchorAbsPos.type,
-            anchorAbsPos.index,
-          );
-          const [focusCollabNode, focusOffset] = getCollabNodeAndOffset(
-            focusAbsPos.type,
-            focusAbsPos.index,
-          );
+        if (anchorCollabNode !== null && focusCollabNode !== null) {
+          const anchorKey = anchorCollabNode.getKey();
+          const focusKey = focusCollabNode.getKey();
+          selection = cursor.selection;
 
-          if (anchorCollabNode !== null && focusCollabNode !== null) {
-            const anchorKey = anchorCollabNode.getKey();
-            const focusKey = focusCollabNode.getKey();
-            selection = cursor.selection;
-
-            if (selection === null) {
-              selection = createCursorSelection(
-                cursor,
-                anchorKey,
-                anchorOffset,
-                focusKey,
-                focusOffset,
-              );
-            } else {
-              const anchor = selection.anchor;
-              const focus = selection.focus;
-              anchor.key = anchorKey;
-              anchor.offset = anchorOffset;
-              focus.key = focusKey;
-              focus.offset = focusOffset;
-            }
+          if (selection === null) {
+            selection = createCursorSelection(
+              cursor,
+              anchorKey,
+              anchorOffset,
+              focusKey,
+              focusOffset,
+            );
+          } else {
+            const anchor = selection.anchor;
+            const focus = selection.focus;
+            anchor.key = anchorKey;
+            anchor.offset = anchorOffset;
+            focus.key = focusKey;
+            focus.offset = focusOffset;
           }
         }
       }
@@ -490,8 +493,8 @@ export function syncCursorPositions(
 export function syncLexicalSelectionToYjs(
   binding: Binding,
   provider: Provider,
-  prevSelection: null | RangeSelection | NodeSelection | GridSelection,
-  nextSelection: null | RangeSelection | NodeSelection | GridSelection,
+  prevSelection: null | BaseSelection,
+  nextSelection: null | BaseSelection,
 ): void {
   const awareness = provider.awareness;
   const localState = awareness.getLocalState();
@@ -530,6 +533,7 @@ export function syncLexicalSelectionToYjs(
     shouldUpdatePosition(currentFocusPos, focusPos)
   ) {
     awareness.setLocalState({
+      ...localState,
       anchorPos,
       awarenessData,
       color,

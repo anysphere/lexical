@@ -1,4 +1,3 @@
-/** @module @lexical/yjs */
 /**
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
@@ -21,6 +20,7 @@ export type UserState = {
   focusPos: null | RelativePosition;
   name: string;
   awarenessData: object;
+  [key: string]: unknown;
 };
 export const CONNECTED_COMMAND: LexicalCommand<boolean> =
   createCommand('CONNECTED_COMMAND');
@@ -33,6 +33,7 @@ export type ProviderAwareness = {
   off: (type: 'update', cb: () => void) => void;
   on: (type: 'update', cb: () => void) => void;
   setLocalState: (arg0: UserState) => void;
+  setLocalStateField: (field: string, value: unknown) => void;
 };
 declare interface Provider {
   awareness: ProviderAwareness;
@@ -110,7 +111,11 @@ export function setLocalStateFocus(
   localState.focusing = focusing;
   awareness.setLocalState(localState);
 }
-export {syncCursorPositions} from './SyncCursors';
+export {
+  getAnchorAndFocusCollabNodesForUserState,
+  syncCursorPositions,
+  type SyncCursorPositionsFn,
+} from './SyncCursors';
 export {
   syncLexicalUpdateToYjs,
   syncYjsChangesToLexical,

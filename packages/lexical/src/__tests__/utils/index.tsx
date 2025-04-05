@@ -6,59 +6,104 @@
  *
  */
 
-import type {
-  EditorState,
-  EditorThemeClasses,
-  Klass,
-  LexicalEditor,
-  LexicalNode,
-  RangeSelection,
-  SerializedElementNode,
-  SerializedLexicalNode,
-  SerializedTextNode,
-} from 'lexical';
+import type {JSX} from 'react';
 
 import {CodeHighlightNode, CodeNode} from '@lexical/code';
 import {HashtagNode} from '@lexical/hashtag';
+import {createHeadlessEditor} from '@lexical/headless';
 import {AutoLinkNode, LinkNode} from '@lexical/link';
 import {ListItemNode, ListNode} from '@lexical/list';
+import {MarkNode} from '@lexical/mark';
 import {OverflowNode} from '@lexical/overflow';
-import {LexicalComposer} from '@lexical/react/src/LexicalComposer';
+import {
+  InitialConfigType,
+  LexicalComposer,
+} from '@lexical/react/LexicalComposer';
+import {
+  createLexicalComposerContext,
+  LexicalComposerContext,
+} from '@lexical/react/LexicalComposerContext';
 import {HeadingNode, QuoteNode} from '@lexical/rich-text';
 import {TableCellNode, TableNode, TableRowNode} from '@lexical/table';
+import {expect} from '@playwright/test';
 import {
   $isRangeSelection,
   createEditor,
   DecoratorNode,
+  EditorState,
+  EditorThemeClasses,
   ElementNode,
+  Klass,
+  LexicalEditor,
+  LexicalNode,
+  LexicalUpdateJSON,
+  RangeSelection,
+  SerializedElementNode,
+  SerializedLexicalNode,
+  SerializedTextNode,
+  Spread,
   TextNode,
 } from 'lexical';
+import path from 'path';
+import * as prettier from 'prettier';
 import * as React from 'react';
 import {createRef} from 'react';
 import {createRoot} from 'react-dom/client';
-import * as ReactTestUtils from 'react-dom/test-utils';
+import * as ReactTestUtils from 'shared/react-test-utils';
 
+import {
+  CreateEditorArgs,
+  HTMLConfig,
+  LexicalNodeReplacement,
+} from '../../LexicalEditor';
 import {resetRandomKey} from '../../LexicalUtils';
 
+const prettierConfig = prettier.resolveConfig.sync(
+  path.resolve(__dirname, '../../../../.prettierrc'),
+);
+
 type TestEnv = {
-  container: HTMLDivElement | null;
-  editor: LexicalEditor | null;
-  outerHTML: string;
-  innerHTML: string;
+  readonly container: HTMLDivElement;
+  readonly editor: LexicalEditor;
+  readonly outerHTML: string;
+  readonly innerHTML: string;
 };
 
 export function initializeUnitTest(
   runTests: (testEnv: TestEnv) => void,
-  editorConfig = {},
+  editorConfig: CreateEditorArgs = {namespace: 'test', theme: {}},
+  plugins?: React.ReactNode,
 ) {
-  const testEnv: TestEnv = {
-    container: null,
-    editor: null,
+  const testEnv = {
+    _container: null as HTMLDivElement | null,
+    _editor: null as LexicalEditor | null,
+    get container() {
+      if (!this._container) {
+        throw new Error('testEnv.container not initialized.');
+      }
+      return this._container;
+    },
+    set container(container) {
+      this._container = container;
+    },
+    get editor() {
+      if (!this._editor) {
+        throw new Error('testEnv.editor not initialized.');
+      }
+      return this._editor;
+    },
+    set editor(editor) {
+      this._editor = editor;
+    },
     get innerHTML() {
-      return this.container.firstChild.innerHTML;
+      return (this.container.firstChild as HTMLElement).innerHTML;
     },
     get outerHTML() {
       return this.container.innerHTML;
+    },
+    reset() {
+      this._container = null;
+      this._editor = null;
     },
   };
 
@@ -69,7 +114,9 @@ export function initializeUnitTest(
     document.body.appendChild(testEnv.container);
     const ref = createRef<HTMLDivElement>();
 
-    const useLexicalEditor = (rootElementRef) => {
+    const useLexicalEditor = (
+      rootElementRef: React.RefObject<HTMLDivElement>,
+    ) => {
       const lexicalEditor = React.useMemo(() => {
         const lexical = createTestEditor(editorConfig);
         return lexical;
@@ -84,7 +131,16 @@ export function initializeUnitTest(
 
     const Editor = () => {
       testEnv.editor = useLexicalEditor(ref);
-      return <div ref={ref} contentEditable={true} />;
+      const context = createLexicalComposerContext(
+        null,
+        editorConfig?.theme ?? {},
+      );
+      return (
+        <LexicalComposerContext.Provider value={[testEnv.editor, context]}>
+          <div ref={ref} contentEditable={true} />
+          {plugins}
+        </LexicalComposerContext.Provider>
+      );
     };
 
     ReactTestUtils.act(() => {
@@ -94,7 +150,7 @@ export function initializeUnitTest(
 
   afterEach(() => {
     document.body.removeChild(testEnv.container);
-    testEnv.container = null;
+    testEnv.reset();
   });
 
   runTests(testEnv);
@@ -123,19 +179,7 @@ export class TestElementNode extends ElementNode {
   static importJSON(
     serializedNode: SerializedTestElementNode,
   ): TestInlineElementNode {
-    const node = $createTestInlineElementNode();
-    node.setFormat(serializedNode.format);
-    node.setIndent(serializedNode.indent);
-    node.setDirection(serializedNode.direction);
-    return node;
-  }
-
-  exportJSON(): SerializedTestElementNode {
-    return {
-      ...super.exportJSON(),
-      type: 'test_block',
-      version: 1,
-    };
+    return $createTestInlineElementNode().updateFromJSON(serializedNode);
   }
 
   createDOM() {
@@ -159,21 +203,11 @@ export class TestTextNode extends TextNode {
   }
 
   static clone(node: TestTextNode): TestTextNode {
-    // @ts-ignore
     return new TestTextNode(node.__text, node.__key);
   }
 
   static importJSON(serializedNode: SerializedTestTextNode): TestTextNode {
-    // @ts-ignore
-    return new TestTextNode(serializedNode.__text);
-  }
-
-  exportJSON(): SerializedTestTextNode {
-    return {
-      ...super.exportJSON(),
-      type: 'test_text',
-      version: 1,
-    };
+    return new TestTextNode().updateFromJSON(serializedNode);
   }
 }
 
@@ -191,19 +225,7 @@ export class TestInlineElementNode extends ElementNode {
   static importJSON(
     serializedNode: SerializedTestInlineElementNode,
   ): TestInlineElementNode {
-    const node = $createTestInlineElementNode();
-    node.setFormat(serializedNode.format);
-    node.setIndent(serializedNode.indent);
-    node.setDirection(serializedNode.direction);
-    return node;
-  }
-
-  exportJSON(): SerializedTestInlineElementNode {
-    return {
-      ...super.exportJSON(),
-      type: 'test_inline_block',
-      version: 1,
-    };
+    return $createTestInlineElementNode().updateFromJSON(serializedNode);
   }
 
   createDOM() {
@@ -237,19 +259,7 @@ export class TestShadowRootNode extends ElementNode {
   static importJSON(
     serializedNode: SerializedTestShadowRootNode,
   ): TestShadowRootNode {
-    const node = $createTestShadowRootNode();
-    node.setFormat(serializedNode.format);
-    node.setIndent(serializedNode.indent);
-    node.setDirection(serializedNode.direction);
-    return node;
-  }
-
-  exportJSON(): SerializedTestShadowRootNode {
-    return {
-      ...super.exportJSON(),
-      type: 'test_block',
-      version: 1,
-    };
+    return $createTestShadowRootNode().updateFromJSON(serializedNode);
   }
 
   createDOM() {
@@ -283,24 +293,11 @@ export class TestSegmentedNode extends TextNode {
   static importJSON(
     serializedNode: SerializedTestSegmentedNode,
   ): TestSegmentedNode {
-    const node = $createTestSegmentedNode(serializedNode.text);
-    node.setFormat(serializedNode.format);
-    node.setDetail(serializedNode.detail);
-    node.setMode(serializedNode.mode);
-    node.setStyle(serializedNode.style);
-    return node;
-  }
-
-  exportJSON(): SerializedTestSegmentedNode {
-    return {
-      ...super.exportJSON(),
-      type: 'test_segmented',
-      version: 1,
-    };
+    return $createTestSegmentedNode().updateFromJSON(serializedNode);
   }
 }
 
-export function $createTestSegmentedNode(text): TestSegmentedNode {
+export function $createTestSegmentedNode(text: string = ''): TestSegmentedNode {
   return new TestSegmentedNode(text).setMode('segmented');
 }
 
@@ -318,19 +315,9 @@ export class TestExcludeFromCopyElementNode extends ElementNode {
   static importJSON(
     serializedNode: SerializedTestExcludeFromCopyElementNode,
   ): TestExcludeFromCopyElementNode {
-    const node = $createTestExcludeFromCopyElementNode();
-    node.setFormat(serializedNode.format);
-    node.setIndent(serializedNode.indent);
-    node.setDirection(serializedNode.direction);
-    return node;
-  }
-
-  exportJSON(): SerializedTestExcludeFromCopyElementNode {
-    return {
-      ...super.exportJSON(),
-      type: 'test_exclude_from_copy_block',
-      version: 1,
-    };
+    return $createTestExcludeFromCopyElementNode().updateFromJSON(
+      serializedNode,
+    );
   }
 
   createDOM() {
@@ -350,9 +337,13 @@ export function $createTestExcludeFromCopyElementNode(): TestExcludeFromCopyElem
   return new TestExcludeFromCopyElementNode();
 }
 
-export type SerializedTestDecoratorNode = SerializedLexicalNode;
+export type SerializedTestDecoratorNode = Spread<
+  SerializedLexicalNode,
+  {block?: boolean}
+>;
 
 export class TestDecoratorNode extends DecoratorNode<JSX.Element> {
+  __block: boolean = false;
   static getType(): string {
     return 'test_decorator';
   }
@@ -364,15 +355,7 @@ export class TestDecoratorNode extends DecoratorNode<JSX.Element> {
   static importJSON(
     serializedNode: SerializedTestDecoratorNode,
   ): TestDecoratorNode {
-    return $createTestDecoratorNode();
-  }
-
-  exportJSON(): SerializedTestDecoratorNode {
-    return {
-      ...super.exportJSON(),
-      type: 'test_decorator',
-      version: 1,
-    };
+    return $createTestDecoratorNode().updateFromJSON(serializedNode);
   }
 
   static importDOM() {
@@ -383,6 +366,37 @@ export class TestDecoratorNode extends DecoratorNode<JSX.Element> {
         };
       },
     };
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedTestDecoratorNode>,
+  ): this {
+    return super
+      .updateFromJSON(serializedNode)
+      .setIsInline(!serializedNode.block);
+  }
+
+  afterCloneFrom(prevNode: this): void {
+    super.afterCloneFrom(prevNode);
+    this.__block = prevNode.__block;
+  }
+
+  isInline(): boolean {
+    return !this.getLatest().__block;
+  }
+
+  setIsInline(inline: boolean): this {
+    const self = this.getWritable();
+    self.__block = !inline;
+    return self;
+  }
+
+  exportJSON(): SerializedTestDecoratorNode {
+    const json: SerializedTestDecoratorNode = super.exportJSON();
+    if (this.__block) {
+      json.block = this.__block;
+    }
+    return json;
   }
 
   exportDOM() {
@@ -396,11 +410,11 @@ export class TestDecoratorNode extends DecoratorNode<JSX.Element> {
   }
 
   createDOM() {
-    return document.createElement('span');
+    return document.createElement(this.__block ? 'div' : 'span');
   }
 
-  updateDOM() {
-    return false;
+  updateDOM(prevNode: this) {
+    return this.__block !== prevNode.__block;
   }
 
   decorate() {
@@ -408,7 +422,7 @@ export class TestDecoratorNode extends DecoratorNode<JSX.Element> {
   }
 }
 
-function Decorator({text}): JSX.Element {
+function Decorator({text}: {text: string}): JSX.Element {
   return <span>{text}</span>;
 }
 
@@ -416,7 +430,7 @@ export function $createTestDecoratorNode(): TestDecoratorNode {
   return new TestDecoratorNode();
 }
 
-const DEFAULT_NODES = [
+const DEFAULT_NODES: NonNullable<InitialConfigType['nodes']> = [
   HeadingNode,
   ListNode,
   ListItemNode,
@@ -437,6 +451,7 @@ const DEFAULT_NODES = [
   TestInlineElementNode,
   TestShadowRootNode,
   TestTextNode,
+  MarkNode,
 ];
 
 export function TestComposer({
@@ -445,6 +460,9 @@ export function TestComposer({
     theme: {},
   },
   children,
+}: {
+  config?: Omit<InitialConfigType, 'onError' | 'namespace'>;
+  children: React.ComponentProps<typeof LexicalComposer>['children'];
 }) {
   const customNodes = config.nodes;
   return (
@@ -455,7 +473,7 @@ export function TestComposer({
         },
         ...config,
         namespace: '',
-        nodes: DEFAULT_NODES.concat(customNodes),
+        nodes: DEFAULT_NODES.concat(customNodes || []),
       }}>
       {children}
     </LexicalComposer>
@@ -468,19 +486,11 @@ export function createTestEditor(
     editorState?: EditorState;
     theme?: EditorThemeClasses;
     parentEditor?: LexicalEditor;
-    nodes?: ReadonlyArray<
-      | Klass<LexicalNode>
-      | {
-          replace: Klass<LexicalNode>;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          with: <T extends {new (...args: any): any}>(
-            node: InstanceType<T>,
-          ) => LexicalNode;
-        }
-    >;
+    nodes?: ReadonlyArray<Klass<LexicalNode> | LexicalNodeReplacement>;
     onError?: (error: Error) => void;
     disableEvents?: boolean;
     readOnly?: boolean;
+    html?: HTMLConfig;
   } = {},
 ): LexicalEditor {
   const customNodes = config.nodes || [];
@@ -490,13 +500,23 @@ export function createTestEditor(
       throw e;
     },
     ...config,
-    // @ts-ignore
     nodes: DEFAULT_NODES.concat(customNodes),
   });
   return editor;
 }
 
-export function $assertRangeSelection(selection): RangeSelection {
+export function createTestHeadlessEditor(
+  editorState?: EditorState,
+): LexicalEditor {
+  return createHeadlessEditor({
+    editorState,
+    onError: (error) => {
+      throw error;
+    },
+  });
+}
+
+export function $assertRangeSelection(selection: unknown): RangeSelection {
   if (!$isRangeSelection(selection)) {
     throw new Error(`Expected RangeSelection, got ${selection}`);
   }
@@ -510,30 +530,41 @@ export function invariant(cond?: boolean, message?: string): asserts cond {
   throw new Error(`Invariant: ${message}`);
 }
 
+export class ClipboardDataMock {
+  getData: jest.Mock<string, [string]>;
+  setData: jest.Mock<void, [string, string]>;
+
+  constructor() {
+    this.getData = jest.fn();
+    this.setData = jest.fn();
+  }
+}
+
 export class DataTransferMock implements DataTransfer {
   _data: Map<string, string> = new Map();
-  dropEffect: 'none' | 'copy' | 'link' | 'move';
-  effectAllowed:
-    | 'none'
-    | 'copy'
-    | 'copyLink'
-    | 'copyMove'
-    | 'link'
-    | 'linkMove'
-    | 'move'
-    | 'all'
-    | 'uninitialized';
-  readonly files: FileList;
-  readonly items: DataTransferItemList;
-  readonly types: ReadonlyArray<string>;
-  clearData(format?: string): void {
+  get dropEffect(): DataTransfer['dropEffect'] {
+    throw new Error('Getter not implemented.');
+  }
+  get effectAllowed(): DataTransfer['effectAllowed'] {
+    throw new Error('Getter not implemented.');
+  }
+  get files(): FileList {
+    throw new Error('Getter not implemented.');
+  }
+  get items(): DataTransferItemList {
+    throw new Error('Getter not implemented.');
+  }
+  get types(): ReadonlyArray<string> {
+    return Array.from(this._data.keys());
+  }
+  clearData(dataType?: string): void {
     //
   }
-  getData(dataType): string {
+  getData(dataType: string): string {
     return this._data.get(dataType) || '';
   }
-  setData(format: string, data: string): void {
-    this._data.set(format, data);
+  setData(dataType: string, data: string): void {
+    this._data.set(dataType, data);
   }
   setDragImage(image: Element, x: number, y: number): void {
     //
@@ -541,19 +572,45 @@ export class DataTransferMock implements DataTransfer {
 }
 
 export class EventMock implements Event {
-  bubbles: boolean;
-  cancelBubble: boolean;
-  cancelable: boolean;
-  composed: boolean;
-  currentTarget: EventTarget | null;
-  defaultPrevented: boolean;
-  eventPhase: number;
-  isTrusted: boolean;
-  returnValue: boolean;
-  srcElement: EventTarget | null;
-  target: EventTarget | null;
-  timeStamp: number;
-  type: string;
+  get bubbles(): boolean {
+    throw new Error('Getter not implemented.');
+  }
+  get cancelBubble(): boolean {
+    throw new Error('Gettter not implemented.');
+  }
+  get cancelable(): boolean {
+    throw new Error('Gettter not implemented.');
+  }
+  get composed(): boolean {
+    throw new Error('Gettter not implemented.');
+  }
+  get currentTarget(): EventTarget | null {
+    throw new Error('Gettter not implemented.');
+  }
+  get defaultPrevented(): boolean {
+    throw new Error('Gettter not implemented.');
+  }
+  get eventPhase(): number {
+    throw new Error('Gettter not implemented.');
+  }
+  get isTrusted(): boolean {
+    throw new Error('Gettter not implemented.');
+  }
+  get returnValue(): boolean {
+    throw new Error('Gettter not implemented.');
+  }
+  get srcElement(): EventTarget | null {
+    throw new Error('Gettter not implemented.');
+  }
+  get target(): EventTarget | null {
+    throw new Error('Gettter not implemented.');
+  }
+  get timeStamp(): number {
+    throw new Error('Gettter not implemented.');
+  }
+  get type(): string {
+    throw new Error('Gettter not implemented.');
+  }
   composedPath(): EventTarget[] {
     throw new Error('Method not implemented.');
   }
@@ -570,27 +627,41 @@ export class EventMock implements Event {
   stopPropagation(): void {
     return;
   }
-  NONE: 0;
-  CAPTURING_PHASE: 1;
-  AT_TARGET: 2;
-  BUBBLING_PHASE: 3;
+  NONE = 0 as const;
+  CAPTURING_PHASE = 1 as const;
+  AT_TARGET = 2 as const;
+  BUBBLING_PHASE = 3 as const;
   preventDefault() {
     return;
   }
 }
 
 export class KeyboardEventMock extends EventMock implements KeyboardEvent {
-  altKey: boolean;
-  charCode: number;
-  code: string;
-  ctrlKey: boolean;
-  isComposing: boolean;
-  key: string;
-  keyCode: number;
-  location: number;
-  metaKey: boolean;
-  repeat: boolean;
-  shiftKey: boolean;
+  altKey = false;
+  get charCode(): number {
+    throw new Error('Getter not implemented.');
+  }
+  get code(): string {
+    throw new Error('Getter not implemented.');
+  }
+  ctrlKey = false;
+  get isComposing(): boolean {
+    throw new Error('Getter not implemented.');
+  }
+  get key(): string {
+    throw new Error('Getter not implemented.');
+  }
+  get keyCode(): number {
+    throw new Error('Getter not implemented.');
+  }
+  get location(): number {
+    throw new Error('Getter not implemented.');
+  }
+  metaKey = false;
+  get repeat(): boolean {
+    throw new Error('Getter not implemented.');
+  }
+  shiftKey = false;
   constructor(type: void | string) {
     super();
   }
@@ -611,13 +682,19 @@ export class KeyboardEventMock extends EventMock implements KeyboardEvent {
   ): void {
     throw new Error('Method not implemented.');
   }
-  DOM_KEY_LOCATION_STANDARD: 0;
-  DOM_KEY_LOCATION_LEFT: 1;
-  DOM_KEY_LOCATION_RIGHT: 2;
-  DOM_KEY_LOCATION_NUMPAD: 3;
-  detail: number;
-  view: Window | null;
-  which: number;
+  DOM_KEY_LOCATION_STANDARD = 0 as const;
+  DOM_KEY_LOCATION_LEFT = 1 as const;
+  DOM_KEY_LOCATION_RIGHT = 2 as const;
+  DOM_KEY_LOCATION_NUMPAD = 3 as const;
+  get detail(): number {
+    throw new Error('Getter not implemented.');
+  }
+  get view(): Window | null {
+    throw new Error('Getter not implemented.');
+  }
+  get which(): number {
+    throw new Error('Getter not implemented.');
+  }
   initUIEvent(
     typeArg: string,
     bubblesArg?: boolean | undefined,
@@ -667,4 +744,48 @@ export function generatePermutations<T>(
     }
   })();
   return result;
+}
+
+// This tag function is just used to trigger prettier auto-formatting.
+// (https://prettier.io/blog/2020/08/24/2.1.0.html#api)
+export function html(
+  partials: TemplateStringsArray,
+  ...params: string[]
+): string {
+  let output = '';
+  for (let i = 0; i < partials.length; i++) {
+    output += partials[i];
+    if (i < partials.length - 1) {
+      output += params[i];
+    }
+  }
+  return output;
+}
+
+export function polyfillContentEditable() {
+  const div = document.createElement('div');
+  div.contentEditable = 'true';
+  if (/contenteditable/.test(div.outerHTML)) {
+    return;
+  }
+  Object.defineProperty(HTMLElement.prototype, 'contentEditable', {
+    get() {
+      return this.getAttribute('contenteditable');
+    },
+
+    set(value) {
+      this.setAttribute('contenteditable', value);
+    },
+  });
+}
+
+export function expectHtmlToBeEqual(actual: string, expected: string): void {
+  expect(prettifyHtml(actual)).toBe(prettifyHtml(expected));
+}
+
+export function prettifyHtml(s: string): string {
+  return prettier.format(s.replace(/\n/g, ''), {
+    ...prettierConfig,
+    parser: 'html',
+  });
 }

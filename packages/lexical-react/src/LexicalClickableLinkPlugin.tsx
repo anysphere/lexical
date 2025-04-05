@@ -15,6 +15,7 @@ import {
   $isElementNode,
   $isRangeSelection,
   getNearestEditorFromDOMNode,
+  isDOMNode,
 } from 'lexical';
 import {useEffect} from 'react';
 
@@ -32,17 +33,19 @@ function findMatchingDOM<T extends Node>(
   return null;
 }
 
-export default function LexicalClickableLinkPlugin({
+export function ClickableLinkPlugin({
   newTab = true,
+  disabled = false,
 }: {
   newTab?: boolean;
+  disabled?: boolean;
 }): null {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       const target = event.target;
-      if (!(target instanceof Node)) {
+      if (!isDOMNode(target)) {
         return;
       }
       const nearestEditor = getNearestEditorFromDOMNode(target);
@@ -60,14 +63,16 @@ export default function LexicalClickableLinkPlugin({
             clickedNode,
             $isElementNode,
           );
-          if ($isLinkNode(maybeLinkNode)) {
-            url = maybeLinkNode.getURL();
-            urlTarget = maybeLinkNode.getTarget();
-          } else {
-            const a = findMatchingDOM(target, isHTMLAnchorElement);
-            if (a !== null) {
-              url = a.href;
-              urlTarget = a.target;
+          if (!disabled) {
+            if ($isLinkNode(maybeLinkNode)) {
+              url = maybeLinkNode.sanitizeUrl(maybeLinkNode.getURL());
+              urlTarget = maybeLinkNode.getTarget();
+            } else {
+              const a = findMatchingDOM(target, isHTMLAnchorElement);
+              if (a !== null) {
+                url = a.href;
+                urlTarget = a.target;
+              }
             }
           }
         }
@@ -99,7 +104,7 @@ export default function LexicalClickableLinkPlugin({
     };
 
     const onMouseUp = (event: MouseEvent) => {
-      if (event.button === 1 && editor.isEditable()) {
+      if (event.button === 1) {
         onClick(event);
       }
     };
@@ -114,7 +119,7 @@ export default function LexicalClickableLinkPlugin({
         rootElement.addEventListener('mouseup', onMouseUp);
       }
     });
-  }, [editor, newTab]);
+  }, [editor, newTab, disabled]);
 
   return null;
 }

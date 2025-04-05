@@ -7,8 +7,8 @@
  */
 
 import type {
+  BaseSelection,
   ElementNode,
-  GridSelection,
   LexicalNode,
   NodeKey,
   Point,
@@ -16,85 +16,109 @@ import type {
   TextNode,
 } from 'lexical';
 
+import {TableSelection} from '@lexical/table';
 import {
-  $getAdjacentNode,
+  $caretFromPoint,
+  $createRangeSelection,
+  $extendCaretToRange,
   $getPreviousSelection,
-  $getRoot,
+  $getSelection,
   $hasAncestor,
+  $isChildCaret,
   $isDecoratorNode,
   $isElementNode,
+  $isExtendableTextPointCaret,
   $isLeafNode,
   $isRangeSelection,
   $isRootNode,
   $isRootOrShadowRoot,
   $isTextNode,
   $setSelection,
+  INTERNAL_$isBlock,
 } from 'lexical';
+import invariant from 'shared/invariant';
 
 import {getStyleObjectFromCSS} from './utils';
+
+export function $copyBlockFormatIndent(
+  srcNode: ElementNode,
+  destNode: ElementNode,
+): void {
+  const format = srcNode.getFormatType();
+  const indent = srcNode.getIndent();
+  if (format !== destNode.getFormatType()) {
+    destNode.setFormat(format);
+  }
+  if (indent !== destNode.getIndent()) {
+    destNode.setIndent(indent);
+  }
+}
 
 /**
  * Converts all nodes in the selection that are of one block type to another.
  * @param selection - The selected blocks to be converted.
- * @param createElement - The function that creates the node. eg. $createParagraphNode.
+ * @param $createElement - The function that creates the node. eg. $createParagraphNode.
+ * @param $afterCreateElement - The function that updates the new node based on the previous one ($copyBlockFormatIndent by default)
  */
-export function $setBlocksType(
-  selection: RangeSelection | GridSelection,
-  createElement: () => ElementNode,
+export function $setBlocksType<T extends ElementNode>(
+  selection: BaseSelection | null,
+  $createElement: () => T,
+  $afterCreateElement: (
+    prevNodeSrc: ElementNode,
+    newNodeDest: T,
+  ) => void = $copyBlockFormatIndent,
 ): void {
-  if (selection.anchor.key === 'root') {
-    const element = createElement();
-    const root = $getRoot();
-    const firstChild = root.getFirstChild();
-
-    if (firstChild) {
-      firstChild.replace(element, true);
-    } else {
-      root.append(element);
-    }
-
+  if (selection === null) {
     return;
   }
-
-  const nodes = selection.getNodes();
-  let maybeBlock = selection.anchor.getNode().getParentOrThrow();
-
-  if (nodes.indexOf(maybeBlock) === -1) {
-    nodes.push(maybeBlock);
-  }
-
-  if (maybeBlock.isInline()) {
-    maybeBlock = maybeBlock.getParentOrThrow();
-
-    if (nodes.indexOf(maybeBlock) === -1) {
-      nodes.push(maybeBlock);
+  // Selections tend to not include their containing blocks so we effectively
+  // expand it here
+  const anchorAndFocus = selection.getStartEndPoints();
+  const blockMap = new Map<NodeKey, ElementNode>();
+  let newSelection: RangeSelection | null = null;
+  if (anchorAndFocus) {
+    const [anchor, focus] = anchorAndFocus;
+    newSelection = $createRangeSelection();
+    newSelection.anchor.set(anchor.key, anchor.offset, anchor.type);
+    newSelection.focus.set(focus.key, focus.offset, focus.type);
+    const anchorBlock = $getAncestor(anchor.getNode(), INTERNAL_$isBlock);
+    const focusBlock = $getAncestor(focus.getNode(), INTERNAL_$isBlock);
+    if ($isElementNode(anchorBlock)) {
+      blockMap.set(anchorBlock.getKey(), anchorBlock);
+    }
+    if ($isElementNode(focusBlock)) {
+      blockMap.set(focusBlock.getKey(), focusBlock);
     }
   }
-
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i];
-
-    if (!isBlock(node)) {
-      continue;
+  for (const node of selection.getNodes()) {
+    if ($isElementNode(node) && INTERNAL_$isBlock(node)) {
+      blockMap.set(node.getKey(), node);
     }
-
-    const targetElement = createElement();
-    targetElement.setFormat(node.getFormatType());
-    targetElement.setIndent(node.getIndent());
-    node.replace(targetElement, true);
   }
-}
-
-function isBlock(node: LexicalNode): boolean {
-  if (!$isElementNode(node) || $isRootOrShadowRoot(node)) {
-    return false;
+  for (const [key, prevNode] of blockMap) {
+    const element = $createElement();
+    $afterCreateElement(prevNode, element);
+    prevNode.replace(element, true);
+    if (newSelection) {
+      if (key === newSelection.anchor.key) {
+        newSelection.anchor.set(
+          element.getKey(),
+          newSelection.anchor.offset,
+          newSelection.anchor.type,
+        );
+      }
+      if (key === newSelection.focus.key) {
+        newSelection.focus.set(
+          element.getKey(),
+          newSelection.focus.offset,
+          newSelection.focus.type,
+        );
+      }
+    }
   }
-
-  const firstChild = node.getFirstChild();
-  const isLeafElement =
-    firstChild === null || $isTextNode(firstChild) || firstChild.isInline();
-
-  return !node.isInline() && node.canBeEmpty() !== false && isLeafElement;
+  if (newSelection && selection.is($getSelection())) {
+    $setSelection(newSelection);
+  }
 }
 
 function isPointAttached(point: Point): boolean {
@@ -124,19 +148,21 @@ function $removeParentEmptyElements(startingNode: ElementNode): void {
  * @param wrappingElement - An element to append the wrapped selection and its children to.
  */
 export function $wrapNodes(
-  selection: RangeSelection | GridSelection,
+  selection: BaseSelection,
   createElement: () => ElementNode,
   wrappingElement: null | ElementNode = null,
 ): void {
+  const anchorAndFocus = selection.getStartEndPoints();
+  const anchor = anchorAndFocus ? anchorAndFocus[0] : null;
   const nodes = selection.getNodes();
   const nodesLength = nodes.length;
-  const anchor = selection.anchor;
 
   if (
-    nodesLength === 0 ||
-    (nodesLength === 1 &&
-      anchor.type === 'element' &&
-      anchor.getNode().getChildrenSize() === 0)
+    anchor !== null &&
+    (nodesLength === 0 ||
+      (nodesLength === 1 &&
+        anchor.type === 'element' &&
+        anchor.getNode().getChildrenSize() === 0))
   ) {
     const target =
       anchor.type === 'text'
@@ -210,7 +236,7 @@ export function $wrapNodes(
  * @returns
  */
 export function $wrapNodesImpl(
-  selection: RangeSelection | GridSelection,
+  selection: BaseSelection,
   nodes: LexicalNode[],
   nodesLength: number,
   createElement: () => ElementNode,
@@ -302,6 +328,10 @@ export function $wrapNodesImpl(
         $removeParentEmptyElements(parent);
       }
     } else if (emptyElements.has(node.getKey())) {
+      invariant(
+        $isElementNode(node),
+        'Expected node in emptyElements to be an ElementNode',
+      );
       const targetElement = createElement();
       targetElement.setFormat(node.getFormatType());
       targetElement.setIndent(node.getIndent());
@@ -396,14 +426,24 @@ export function $shouldOverrideDefaultCharacterSelection(
   selection: RangeSelection,
   isBackward: boolean,
 ): boolean {
-  const possibleNode = $getAdjacentNode(selection.focus, isBackward);
-
-  return (
-    ($isDecoratorNode(possibleNode) && !possibleNode.isIsolated()) ||
-    ($isElementNode(possibleNode) &&
-      !possibleNode.isInline() &&
-      !possibleNode.canBeEmpty())
+  const focusCaret = $caretFromPoint(
+    selection.focus,
+    isBackward ? 'previous' : 'next',
   );
+  if ($isExtendableTextPointCaret(focusCaret)) {
+    return false;
+  }
+  for (const nextCaret of $extendCaretToRange(focusCaret)) {
+    if ($isChildCaret(nextCaret)) {
+      return !nextCaret.origin.isInline();
+    } else if ($isElementNode(nextCaret.origin)) {
+      continue;
+    } else if ($isDecoratorNode(nextCaret.origin)) {
+      return true;
+    }
+    break;
+  }
+  return false;
 }
 
 /**
@@ -457,41 +497,6 @@ export function $moveCharacter(
 }
 
 /**
- * Expands the current Selection to cover all of the content in the editor.
- * @param selection - The current selection.
- */
-export function $selectAll(selection: RangeSelection): void {
-  const anchor = selection.anchor;
-  const focus = selection.focus;
-  const anchorNode = anchor.getNode();
-  const topParent = anchorNode.getTopLevelElementOrThrow();
-  const root = topParent.getParentOrThrow();
-  let firstNode = root.getFirstDescendant();
-  let lastNode = root.getLastDescendant();
-  let firstType: 'element' | 'text' = 'element';
-  let lastType: 'element' | 'text' = 'element';
-  let lastOffset = 0;
-
-  if ($isTextNode(firstNode)) {
-    firstType = 'text';
-  } else if (!$isElementNode(firstNode) && firstNode !== null) {
-    firstNode = firstNode.getParentOrThrow();
-  }
-
-  if ($isTextNode(lastNode)) {
-    lastType = 'text';
-    lastOffset = lastNode.getTextContentSize();
-  } else if (!$isElementNode(lastNode) && lastNode !== null) {
-    lastNode = lastNode.getParentOrThrow();
-  }
-
-  if (firstNode && lastNode) {
-    anchor.set(firstNode.getKey(), 0, firstType);
-    focus.set(lastNode.getKey(), lastOffset, lastType);
-  }
-}
-
-/**
  * Returns the current value of a CSS property for Nodes, if set. If not set, it returns the defaultValue.
  * @param node - The node whose style value to get.
  * @param styleProperty - The CSS style property.
@@ -522,7 +527,7 @@ function $getNodeStyleValueForProperty(
  * @returns The value of the property for the selected TextNodes.
  */
 export function $getSelectionStyleValueForProperty(
-  selection: RangeSelection,
+  selection: RangeSelection | TableSelection,
   styleProperty: string,
   defaultValue = '',
 ): string {
@@ -534,7 +539,11 @@ export function $getSelectionStyleValueForProperty(
   const endOffset = isBackward ? focus.offset : anchor.offset;
   const endNode = isBackward ? focus.getNode() : anchor.getNode();
 
-  if (selection.style !== '') {
+  if (
+    $isRangeSelection(selection) &&
+    selection.isCollapsed() &&
+    selection.style !== ''
+  ) {
     const css = selection.style;
     const styleObject = getStyleObjectFromCSS(css);
 
@@ -572,4 +581,15 @@ export function $getSelectionStyleValueForProperty(
   }
 
   return styleValue === null ? defaultValue : styleValue;
+}
+
+export function $getAncestor<NodeType extends LexicalNode = LexicalNode>(
+  node: LexicalNode,
+  predicate: (ancestor: LexicalNode) => ancestor is NodeType,
+) {
+  let parent = node;
+  while (parent !== null && parent.getParent() !== null && !predicate(parent)) {
+    parent = parent.getParentOrThrow();
+  }
+  return predicate(parent) ? parent : null;
 }

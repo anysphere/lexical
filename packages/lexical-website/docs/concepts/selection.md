@@ -11,8 +11,10 @@ In Lexical, there are four types of selection possible:
 
 - `RangeSelection`
 - `NodeSelection`
-- `GridSelection`
+- `TableSelection` (implemented in `@lexical/table`)
 - `null`
+
+It is possible, but not generally recommended, to implement your own selection types that implement `BaseSelection`.
 
 ### `RangeSelection`
 
@@ -35,17 +37,17 @@ NodeSelection represents a selection of multiple arbitrary nodes. For example, t
 
 - `getNodes()` returns an array containing the selected LexicalNodes
 
-### `GridSelection`
+### `TableSelection`
 
-GridSelection represents a grid-like selection like tables. It stores the key of the parent node where the selection takes place and the start and end points.
-`GridSelection` consists of three main properties:
+TableSelection represents a grid-like selection like tables. It stores the key of the parent node where the selection takes place and the start and end points.
+`TableSelection` consists of three main properties:
 
-- `gridKey` representing the parent node key where the selection takes place
-- `anchor` representing a `GridSelection` point
-- `focus` reprensenting a `GridSelection` point
+- `tableKey` representing the parent node key where the selection takes place
+- `anchor` representing a `TableSelection` point
+- `focus` representing a `TableSelection` point
 
 For example, a table where you select row = 1 col = 1 to row 2 col = 2 could be stored as follows:
-- `gridKey = 2` table key
+- `tableKey = 2` table key
 - `anchor = 4` table cell (key may vary)
 - `focus = 10` table cell (key may vary)
 
@@ -101,7 +103,7 @@ editor.update(() => {
   someNode.selectPrevious();
   someNode.selectNext();
 
-  // On element nodes, you can use these.
+  // You can use this on any node.
   someNode.selectStart();
   someNode.selectEnd();
 
@@ -114,4 +116,54 @@ editor.update(() => {
   // You can also clear selection by setting it to `null`.
   $setSelection(null);
 });
+```
+
+## Focus
+
+You may notice that when you issue an `editor.update` or
+`editor.dispatchCommand` then the editor can "steal focus" if there is
+a selection and the editor is editable. This is because the Lexical
+selection is reconciled to the DOM selection during reconciliation,
+and the browser's focus follows its DOM selection.
+
+If you want to make updates or dispatch commands to the editor without
+changing the selection, can use the `'skip-dom-selection'` update tag
+(added in v0.22.0):
+
+```js
+// Call this from an editor.update or command listener
+$addUpdateTag('skip-dom-selection');
+```
+
+If you want to add this tag during processing of a `dispatchCommand`,
+you can wrap it in an `editor.update`:
+
+```js
+// NOTE: If you are already in a command listener or editor.update,
+//       do *not* nest a second editor.update! Nested updates have
+//       confusing semantics (dispatchCommand will re-use the
+//       current update without nesting)
+editor.update(() => {
+  $addUpdateTag('skip-dom-selection');
+  editor.dispatchCommand(/* … */);
+});
+```
+
+If you have to support older versions of Lexical, you can mark the editor
+as not editable during the update or dispatch.
+
+```js
+// NOTE: This code should be *outside* of your update or command listener, e.g.
+//       directly in the DOM event listener
+const prevEditable = editor.isEditable();
+editor.setEditable(false);
+editor.update(
+  () => {
+    // run your update code or editor.dispatchCommand in here
+  }, {
+    onUpdate: () => {
+      editor.setEditable(prevEditable);
+    },
+  },
+);
 ```

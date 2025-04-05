@@ -1,4 +1,6 @@
-`@lexical/list`
+# `@lexical/list`
+
+[![See API Documentation](https://lexical.dev/img/see-api-documentation.svg)](https://lexical.dev/docs/api/modules/lexical_list)
 
 This package exposes the primitives for implementing lists in Lexical. If you're trying to implement conventional lists with React, take a look at the ListPlugin exposed
 by [@lexical/react](https://lexical.dev/docs/packages/lexical-react), which wraps these primitives into a neat component that you can drop into any LexicalComposer.
@@ -7,12 +9,12 @@ The API of @lexical/list primarily consists of Lexical Nodes that encapsulate li
 
 ## Functions
 
-### insertList
+### $insertList
 
 As the name suggests, this inserts a list of the provided type according to an algorithm that tries to determine the best way to do that based on
-the current Selection. For instance, if some text is selected, insertList may try to move it into the first item in the list. See the API documentation for more detail.
+the current Selection. For instance, if some text is selected, $insertList may try to move it into the first item in the list. See the API documentation for more detail.
 
-### removeList
+### $removeList
 
 Attempts to remove lists inside the current selection based on a set of opinionated heuristics that implement conventional editor behaviors. For instance, it converts empty ListItemNodes into empty ParagraphNodes.
 
@@ -41,7 +43,7 @@ It's important to note that these commands don't have any functionality on their
 // MyListPlugin.ts
 
 editor.registerCommand(INSERT_UNORDERED_LIST_COMMAND, () => {
-    insertList(editor, 'bullet');
+    $insertList(editor, 'bullet');
     return true;
 }, COMMAND_PRIORITY_LOW);
 
@@ -55,7 +57,7 @@ function onButtonClick(e: MouseEvent) {
 
 ## Theming
 
-Lists can be styled using the following properties in the EditorTheme passed to the editor in the initial config (the values are classses that will be applied in the denoted contexts):
+Lists can be styled using the following properties in the EditorTheme passed to the editor in the initial config (the values are classes that will be applied in the denoted contexts):
 
 ```ts
 {

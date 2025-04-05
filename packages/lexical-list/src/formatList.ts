@@ -9,15 +9,15 @@
 import {$getNearestNodeOfType} from '@lexical/utils';
 import {
   $createParagraphNode,
+  $getChildCaret,
   $getSelection,
   $isElementNode,
   $isLeafNode,
-  $isParagraphNode,
   $isRangeSelection,
   $isRootOrShadowRoot,
-  DEPRECATED_$isGridSelection,
+  $normalizeCaret,
+  $setPointFromCaret,
   ElementNode,
-  LexicalEditor,
   LexicalNode,
   NodeKey,
   ParagraphNode,
@@ -53,33 +53,6 @@ function $isSelectingEmptyListItem(
   );
 }
 
-function $getListItemValue(listItem: ListItemNode): number {
-  const list = listItem.getParent();
-
-  let value = 1;
-
-  if (list != null) {
-    if (!$isListNode(list)) {
-      invariant(
-        false,
-        '$getListItemValue: list node is not parent of list item node',
-      );
-    } else {
-      value = list.getStart();
-    }
-  }
-
-  const siblings = listItem.getPreviousSiblings();
-  for (let i = 0; i < siblings.length; i++) {
-    const sibling = siblings[i];
-
-    if ($isListItemNode(sibling) && !$isListNode(sibling.getFirstChild())) {
-      value++;
-    }
-  }
-  return value;
-}
-
 /**
  * Inserts a new ListNode. If the selection's anchor node is an empty ListItemNode and is a child of
  * the root/shadow root, it will replace the ListItemNode with a ListNode and the old ListItemNode.
@@ -87,23 +60,33 @@ function $getListItemValue(listItem: ListItemNode): number {
  * If the selection's anchor node is not an empty ListItemNode, it will add a new ListNode or merge an existing ListNode,
  * unless the the node is a leaf node, in which case it will attempt to find a ListNode up the branch and replace it with
  * a new ListNode, or create a new ListNode at the nearest root/shadow root.
- * @param editor - The lexical editor.
  * @param listType - The type of list, "number" | "bullet" | "check".
  */
-export function insertList(editor: LexicalEditor, listType: ListType): void {
-  editor.update(() => {
-    const selection = $getSelection();
+export function $insertList(listType: ListType): void {
+  const selection = $getSelection();
 
-    if (
-      $isRangeSelection(selection) ||
-      DEPRECATED_$isGridSelection(selection)
-    ) {
-      const nodes = selection.getNodes();
-      const anchor = selection.anchor;
+  if (selection !== null) {
+    let nodes = selection.getNodes();
+    if ($isRangeSelection(selection)) {
+      const anchorAndFocus = selection.getStartEndPoints();
+      invariant(
+        anchorAndFocus !== null,
+        'insertList: anchor should be defined',
+      );
+      const [anchor] = anchorAndFocus;
       const anchorNode = anchor.getNode();
       const anchorNodeParent = anchorNode.getParent();
 
-      if ($isSelectingEmptyListItem(anchorNode, nodes)) {
+      if ($isRootOrShadowRoot(anchorNode)) {
+        const firstChild = anchorNode.getFirstChild();
+        if (firstChild) {
+          nodes = firstChild.selectStart().getNodes();
+        } else {
+          const paragraph = $createParagraphNode();
+          anchorNode.append(paragraph);
+          nodes = paragraph.select().getNodes();
+        }
+      } else if ($isSelectingEmptyListItem(anchorNode, nodes)) {
         const list = $createListNode(listType);
 
         if ($isRootOrShadowRoot(anchorNodeParent)) {
@@ -121,62 +104,62 @@ export function insertList(editor: LexicalEditor, listType: ListType): void {
         }
 
         return;
-      } else {
-        const handled = new Set();
-        for (let i = 0; i < nodes.length; i++) {
-          const node = nodes[i];
+      }
+    }
 
-          if (
-            $isElementNode(node) &&
-            node.isEmpty() &&
-            !handled.has(node.getKey())
-          ) {
-            createListOrMerge(node, listType);
-            continue;
+    const handled = new Set();
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+
+      if (
+        $isElementNode(node) &&
+        node.isEmpty() &&
+        !$isListItemNode(node) &&
+        !handled.has(node.getKey())
+      ) {
+        $createListOrMerge(node, listType);
+        continue;
+      }
+
+      let parent = $isLeafNode(node)
+        ? node.getParent()
+        : $isListItemNode(node) && node.isEmpty()
+        ? node
+        : null;
+
+      while (parent != null) {
+        const parentKey = parent.getKey();
+
+        if ($isListNode(parent)) {
+          if (!handled.has(parentKey)) {
+            const newListNode = $createListNode(listType);
+            append(newListNode, parent.getChildren());
+            parent.replace(newListNode);
+            handled.add(parentKey);
           }
 
-          if ($isLeafNode(node)) {
-            let parent = node.getParent();
-            while (parent != null) {
-              const parentKey = parent.getKey();
+          break;
+        } else {
+          const nextParent = parent.getParent();
 
-              if ($isListNode(parent)) {
-                if (!handled.has(parentKey)) {
-                  const newListNode = $createListNode(listType);
-                  append(newListNode, parent.getChildren());
-                  parent.replace(newListNode);
-                  updateChildrenListItemValue(newListNode);
-                  handled.add(parentKey);
-                }
-
-                break;
-              } else {
-                const nextParent = parent.getParent();
-
-                if (
-                  $isRootOrShadowRoot(nextParent) &&
-                  !handled.has(parentKey)
-                ) {
-                  handled.add(parentKey);
-                  createListOrMerge(parent, listType);
-                  break;
-                }
-
-                parent = nextParent;
-              }
-            }
+          if ($isRootOrShadowRoot(nextParent) && !handled.has(parentKey)) {
+            handled.add(parentKey);
+            $createListOrMerge(parent, listType);
+            break;
           }
+
+          parent = nextParent;
         }
       }
     }
-  });
+  }
 }
 
 function append(node: ElementNode, nodesToAppend: Array<LexicalNode>) {
   node.splice(node.getChildrenSize(), 0, nodesToAppend);
 }
 
-function createListOrMerge(node: ElementNode, listType: ListType): ListNode {
+function $createListOrMerge(node: ElementNode, listType: ListType): ListNode {
   if ($isListNode(node)) {
     return node;
   }
@@ -184,37 +167,38 @@ function createListOrMerge(node: ElementNode, listType: ListType): ListNode {
   const previousSibling = node.getPreviousSibling();
   const nextSibling = node.getNextSibling();
   const listItem = $createListItemNode();
-  listItem.setFormat(node.getFormatType());
-  listItem.setIndent(node.getIndent());
   append(listItem, node.getChildren());
 
+  let targetList;
   if (
     $isListNode(previousSibling) &&
     listType === previousSibling.getListType()
   ) {
     previousSibling.append(listItem);
-    node.remove();
     // if the same type of list is on both sides, merge them.
-
     if ($isListNode(nextSibling) && listType === nextSibling.getListType()) {
       append(previousSibling, nextSibling.getChildren());
       nextSibling.remove();
     }
-    return previousSibling;
+    targetList = previousSibling;
   } else if (
     $isListNode(nextSibling) &&
     listType === nextSibling.getListType()
   ) {
     nextSibling.getFirstChildOrThrow().insertBefore(listItem);
-    node.remove();
-    return nextSibling;
+    targetList = nextSibling;
   } else {
     const list = $createListNode(listType);
     list.append(listItem);
     node.replace(list);
-    updateChildrenListItemValue(list);
-    return list;
+    targetList = list;
   }
+  // listItem needs to be attached to root prior to setting indent
+  listItem.setFormat(node.getFormatType());
+  listItem.setIndent(node.getIndent());
+  node.remove();
+
+  return targetList;
 }
 
 /**
@@ -240,7 +224,6 @@ export function mergeLists(list1: ListNode, list2: ListNode): void {
   const toMerge = list2.getChildren();
   if (toMerge.length > 0) {
     list1.append(...toMerge);
-    updateChildrenListItemValue(list1);
   }
 
   list2.remove();
@@ -251,91 +234,108 @@ export function mergeLists(list1: ListNode, list2: ListNode): void {
  * it will remove the whole list, including the ListItemNode. For each ListItemNode in the ListNode,
  * removeList will also generate new ParagraphNodes in the removed ListNode's place. Any child node
  * inside a ListItemNode will be appended to the new ParagraphNodes.
- * @param editor - The lexical editor.
  */
-export function removeList(editor: LexicalEditor): void {
-  editor.update(() => {
-    const selection = $getSelection();
+export function $removeList(): void {
+  const selection = $getSelection();
 
-    if ($isRangeSelection(selection)) {
-      const listNodes = new Set<ListNode>();
-      const nodes = selection.getNodes();
-      const anchorNode = selection.anchor.getNode();
+  if ($isRangeSelection(selection)) {
+    const listNodes = new Set<ListNode>();
+    const nodes = selection.getNodes();
+    const anchorNode = selection.anchor.getNode();
 
-      if ($isSelectingEmptyListItem(anchorNode, nodes)) {
-        listNodes.add($getTopListNode(anchorNode));
-      } else {
-        for (let i = 0; i < nodes.length; i++) {
-          const node = nodes[i];
+    if ($isSelectingEmptyListItem(anchorNode, nodes)) {
+      listNodes.add($getTopListNode(anchorNode));
+    } else {
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
 
-          if ($isLeafNode(node)) {
-            const listItemNode = $getNearestNodeOfType(node, ListItemNode);
+        if ($isLeafNode(node)) {
+          const listItemNode = $getNearestNodeOfType(node, ListItemNode);
 
-            if (listItemNode != null) {
-              listNodes.add($getTopListNode(listItemNode));
-            }
+          if (listItemNode != null) {
+            listNodes.add($getTopListNode(listItemNode));
           }
         }
-      }
-
-      for (const listNode of listNodes) {
-        let insertionPoint: ListNode | ParagraphNode = listNode;
-
-        const listItems = $getAllListItems(listNode);
-
-        for (const listItemNode of listItems) {
-          const paragraph = $createParagraphNode();
-
-          append(paragraph, listItemNode.getChildren());
-
-          insertionPoint.insertAfter(paragraph);
-          insertionPoint = paragraph;
-
-          // When the anchor and focus fall on the textNode
-          // we don't have to change the selection because the textNode will be appended to
-          // the newly generated paragraph.
-          // When selection is in empty nested list item, selection is actually on the listItemNode.
-          // When the corresponding listItemNode is deleted and replaced by the newly generated paragraph
-          // we should manually set the selection's focus and anchor to the newly generated paragraph.
-          if (listItemNode.__key === selection.anchor.key) {
-            selection.anchor.set(paragraph.getKey(), 0, 'element');
-          }
-          if (listItemNode.__key === selection.focus.key) {
-            selection.focus.set(paragraph.getKey(), 0, 'element');
-          }
-
-          listItemNode.remove();
-        }
-        listNode.remove();
       }
     }
-  });
+
+    for (const listNode of listNodes) {
+      let insertionPoint: ListNode | ParagraphNode = listNode;
+
+      const listItems = $getAllListItems(listNode);
+
+      for (const listItemNode of listItems) {
+        const paragraph = $createParagraphNode()
+          .setTextStyle(selection.style)
+          .setTextFormat(selection.format);
+
+        append(paragraph, listItemNode.getChildren());
+
+        insertionPoint.insertAfter(paragraph);
+        insertionPoint = paragraph;
+
+        // When the anchor and focus fall on the textNode
+        // we don't have to change the selection because the textNode will be appended to
+        // the newly generated paragraph.
+        // When selection is in empty nested list item, selection is actually on the listItemNode.
+        // When the corresponding listItemNode is deleted and replaced by the newly generated paragraph
+        // we should manually set the selection's focus and anchor to the newly generated paragraph.
+        if (listItemNode.__key === selection.anchor.key) {
+          $setPointFromCaret(
+            selection.anchor,
+            $normalizeCaret($getChildCaret(paragraph, 'next')),
+          );
+        }
+        if (listItemNode.__key === selection.focus.key) {
+          $setPointFromCaret(
+            selection.focus,
+            $normalizeCaret($getChildCaret(paragraph, 'next')),
+          );
+        }
+
+        listItemNode.remove();
+      }
+      listNode.remove();
+    }
+  }
 }
 
 /**
  * Takes the value of a child ListItemNode and makes it the value the ListItemNode
- * should be if it isn't already. If only certain children should be updated, they
- * can be passed optionally in an array.
+ * should be if it isn't already. Also ensures that checked is undefined if the
+ * parent does not have a list type of 'check'.
  * @param list - The list whose children are updated.
- * @param children - An array of the children to be updated.
  */
-export function updateChildrenListItemValue(
-  list: ListNode,
-  children?: Array<LexicalNode>,
-): void {
-  const childrenOrExisting = children || list.getChildren();
-  if (childrenOrExisting !== undefined) {
-    for (let i = 0; i < childrenOrExisting.length; i++) {
-      const child = childrenOrExisting[i];
-      if ($isListItemNode(child)) {
-        const prevValue = child.getValue();
-        const nextValue = $getListItemValue(child);
-
-        if (prevValue !== nextValue) {
-          child.setValue(nextValue);
-        }
+export function updateChildrenListItemValue(list: ListNode): void {
+  const isNotChecklist = list.getListType() !== 'check';
+  let value = list.getStart();
+  for (const child of list.getChildren()) {
+    if ($isListItemNode(child)) {
+      if (child.getValue() !== value) {
+        child.setValue(value);
+      }
+      if (isNotChecklist && child.getLatest().__checked != null) {
+        child.setChecked(undefined);
+      }
+      if (!$isListNode(child.getFirstChild())) {
+        value++;
       }
     }
+  }
+}
+
+/**
+ * Merge the next sibling list if same type.
+ * <ul> will merge with <ul>, but NOT <ul> with <ol>.
+ * @param list - The list whose next sibling should be potentially merged
+ */
+export function mergeNextSiblingListIfSameType(list: ListNode): void {
+  const nextSibling = list.getNextSibling();
+  if (
+    $isListNode(nextSibling) &&
+    list.getListType() === nextSibling.getListType()
+  ) {
+    mergeLists(list, nextSibling);
   }
 }
 
@@ -375,7 +375,6 @@ export function $handleIndent(listItemNode: ListItemNode): void {
         nextSibling.remove();
         removed.add(nextSibling.getKey());
       }
-      updateChildrenListItemValue(innerList);
     }
   } else if (isNestedListNode(nextSibling)) {
     // if the ListItemNode is next to a nested ListNode, merge them
@@ -387,21 +386,23 @@ export function $handleIndent(listItemNode: ListItemNode): void {
       if (firstChild !== null) {
         firstChild.insertBefore(listItemNode);
       }
-      updateChildrenListItemValue(innerList);
     }
   } else if (isNestedListNode(previousSibling)) {
     const innerList = previousSibling.getFirstChild();
 
     if ($isListNode(innerList)) {
       innerList.append(listItemNode);
-      updateChildrenListItemValue(innerList);
     }
   } else {
     // otherwise, we need to create a new nested ListNode
 
     if ($isListNode(parent)) {
-      const newListItem = $createListItemNode();
-      const newList = $createListNode(parent.getListType());
+      const newListItem = $createListItemNode()
+        .setTextFormat(parent.getTextFormat())
+        .setTextStyle(parent.getTextStyle());
+      const newList = $createListNode(parent.getListType())
+        .setTextFormat(parent.getTextFormat())
+        .setTextStyle(parent.getTextStyle());
       newListItem.append(newList);
       newList.append(listItemNode);
 
@@ -412,12 +413,7 @@ export function $handleIndent(listItemNode: ListItemNode): void {
       } else {
         parent.append(newListItem);
       }
-      updateChildrenListItemValue(newList);
     }
-  }
-
-  if ($isListNode(parent)) {
-    updateChildrenListItemValue(parent);
   }
 }
 
@@ -483,8 +479,6 @@ export function $handleOutdent(listItemNode: ListItemNode): void {
       // replace the grandparent list item (now between the siblings) with the outdented list item.
       grandparentListItem.replace(listItemNode);
     }
-    updateChildrenListItemValue(parentList);
-    updateChildrenListItemValue(greatGrandparentList);
   }
 }
 
@@ -506,7 +500,7 @@ export function $handleListInsertParagraph(): boolean {
   // Only run this code on empty list items
   const anchor = selection.anchor.getNode();
 
-  if (!$isListItemNode(anchor) || anchor.getTextContent() !== '') {
+  if (!$isListItemNode(anchor) || anchor.getChildrenSize() !== 0) {
     return false;
   }
   const topListNode = $getTopListNode(anchor);
@@ -519,7 +513,7 @@ export function $handleListInsertParagraph(): boolean {
 
   const grandparent = parent.getParent();
 
-  let replacementNode;
+  let replacementNode: ParagraphNode | ListItemNode;
 
   if ($isRootOrShadowRoot(grandparent)) {
     replacementNode = $createParagraphNode();
@@ -530,24 +524,23 @@ export function $handleListInsertParagraph(): boolean {
   } else {
     return false;
   }
-  replacementNode.select();
+  replacementNode
+    .setTextStyle(selection.style)
+    .setTextFormat(selection.format)
+    .select();
 
   const nextSiblings = anchor.getNextSiblings();
 
   if (nextSiblings.length > 0) {
     const newList = $createListNode(parent.getListType());
-
-    if ($isParagraphNode(replacementNode)) {
-      replacementNode.insertAfter(newList);
-    } else {
+    if ($isListItemNode(replacementNode)) {
       const newListItem = $createListItemNode();
       newListItem.append(newList);
       replacementNode.insertAfter(newListItem);
+    } else {
+      replacementNode.insertAfter(newList);
     }
-    nextSiblings.forEach((sibling) => {
-      sibling.remove();
-      newList.append(sibling);
-    });
+    newList.append(...nextSiblings);
   }
 
   // Don't leave hanging nested empty lists

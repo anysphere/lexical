@@ -1,6 +1,6 @@
 {
   "name": "shared",
-  "private": "true",
+  "private": true,
   "keywords": [
     "react",
     "lexical",
@@ -8,13 +8,14 @@
     "rich-text"
   ],
   "license": "MIT",
-  "version": "0.11.1",
+  "version": "0.29.0",
   "dependencies": {
-    "lexical": "0.11.1"
+    "lexical": "0.29.0"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/facebook/lexical",
     "directory": "packages/shared"
-  }
+  },
+  "sideEffects": false
 }

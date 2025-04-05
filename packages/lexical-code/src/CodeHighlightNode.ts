@@ -7,43 +7,33 @@
  */
 
 import type {
+  CaretDirection,
   EditorConfig,
   EditorThemeClasses,
   LexicalNode,
+  LexicalUpdateJSON,
   LineBreakNode,
   NodeKey,
   SerializedTextNode,
+  SiblingCaret,
   Spread,
   TabNode,
 } from 'lexical';
 
-import 'prismjs/components/prism-clike';
-import 'prismjs/components/prism-javascript';
-import 'prismjs/components/prism-markup';
-import 'prismjs/components/prism-markdown';
-import 'prismjs/components/prism-c';
-import 'prismjs/components/prism-css';
-import 'prismjs/components/prism-objectivec';
-import 'prismjs/components/prism-sql';
-import 'prismjs/components/prism-python';
-import 'prismjs/components/prism-rust';
-import 'prismjs/components/prism-swift';
-import 'prismjs/components/prism-typescript';
-import 'prismjs/components/prism-java';
-import 'prismjs/components/prism-cpp';
-
 import {
+  $getAdjacentCaret,
   addClassNamesToElement,
   removeClassNamesFromElement,
 } from '@lexical/utils';
 import {
   $applyNodeReplacement,
+  $getSiblingCaret,
   $isTabNode,
   ElementNode,
   TextNode,
 } from 'lexical';
-import * as Prism from 'prismjs';
 
+import {Prism} from './CodeHighlighterPrism';
 import {$createCodeNode} from './CodeNode';
 
 export const DEFAULT_CODE_LANGUAGE = 'javascript';
@@ -66,6 +56,7 @@ export const CODE_LANGUAGE_FRIENDLY_NAME_MAP: Record<string, string> = {
   markdown: 'Markdown',
   objc: 'Objective-C',
   plain: 'Plain Text',
+  powershell: 'PowerShell',
   py: 'Python',
   rust: 'Rust',
   sql: 'SQL',
@@ -111,7 +102,7 @@ export class CodeHighlightNode extends TextNode {
   __highlightType: string | null | undefined;
 
   constructor(
-    text: string,
+    text: string = '',
     highlightType?: string | null | undefined,
     key?: NodeKey,
   ) {
@@ -136,6 +127,16 @@ export class CodeHighlightNode extends TextNode {
     return self.__highlightType;
   }
 
+  setHighlightType(highlightType?: string | null | undefined): this {
+    const self = this.getWritable();
+    self.__highlightType = highlightType || undefined;
+    return self;
+  }
+
+  canHaveFormat(): boolean {
+    return false;
+  }
+
   createDOM(config: EditorConfig): HTMLElement {
     const element = super.createDOM(config);
     const className = getHighlightThemeClass(
@@ -146,11 +147,7 @@ export class CodeHighlightNode extends TextNode {
     return element;
   }
 
-  updateDOM(
-    prevNode: CodeHighlightNode,
-    dom: HTMLElement,
-    config: EditorConfig,
-  ): boolean {
+  updateDOM(prevNode: this, dom: HTMLElement, config: EditorConfig): boolean {
     const update = super.updateDOM(prevNode, dom, config);
     const prevClassName = getHighlightThemeClass(
       config.theme,
@@ -174,23 +171,21 @@ export class CodeHighlightNode extends TextNode {
   static importJSON(
     serializedNode: SerializedCodeHighlightNode,
   ): CodeHighlightNode {
-    const node = $createCodeHighlightNode(
-      serializedNode.text,
-      serializedNode.highlightType,
-    );
-    node.setFormat(serializedNode.format);
-    node.setDetail(serializedNode.detail);
-    node.setMode(serializedNode.mode);
-    node.setStyle(serializedNode.style);
-    return node;
+    return $createCodeHighlightNode().updateFromJSON(serializedNode);
+  }
+
+  updateFromJSON(
+    serializedNode: LexicalUpdateJSON<SerializedCodeHighlightNode>,
+  ): this {
+    return super
+      .updateFromJSON(serializedNode)
+      .setHighlightType(serializedNode.highlightType);
   }
 
   exportJSON(): SerializedCodeHighlightNode {
     return {
       ...super.exportJSON(),
       highlightType: this.getHighlightType(),
-      type: 'code-highlight',
-      version: 1,
     };
   }
 
@@ -221,7 +216,7 @@ function getHighlightThemeClass(
 }
 
 export function $createCodeHighlightNode(
-  text: string,
+  text: string = '',
   highlightType?: string | null | undefined,
 ): CodeHighlightNode {
   return $applyNodeReplacement(new CodeHighlightNode(text, highlightType));
@@ -233,26 +228,32 @@ export function $isCodeHighlightNode(
   return node instanceof CodeHighlightNode;
 }
 
-export function getFirstCodeNodeOfLine(
+function $getLastMatchingCodeNode<D extends CaretDirection>(
   anchor: CodeHighlightNode | TabNode | LineBreakNode,
-): null | CodeHighlightNode | TabNode | LineBreakNode {
-  let previousNode = anchor;
-  let node: null | LexicalNode = anchor;
-  while ($isCodeHighlightNode(node) || $isTabNode(node)) {
-    previousNode = node;
-    node = node.getPreviousSibling();
+  direction: D,
+): CodeHighlightNode | TabNode | LineBreakNode {
+  let matchingNode: CodeHighlightNode | TabNode | LineBreakNode = anchor;
+  for (
+    let caret: null | SiblingCaret<LexicalNode, D> = $getSiblingCaret(
+      anchor,
+      direction,
+    );
+    caret && ($isCodeHighlightNode(caret.origin) || $isTabNode(caret.origin));
+    caret = $getAdjacentCaret(caret)
+  ) {
+    matchingNode = caret.origin;
   }
-  return previousNode;
+  return matchingNode;
 }
 
-export function getLastCodeNodeOfLine(
+export function $getFirstCodeNodeOfLine(
   anchor: CodeHighlightNode | TabNode | LineBreakNode,
 ): CodeHighlightNode | TabNode | LineBreakNode {
-  let nextNode = anchor;
-  let node: null | LexicalNode = anchor;
-  while ($isCodeHighlightNode(node) || $isTabNode(node)) {
-    nextNode = node;
-    node = node.getNextSibling();
-  }
-  return nextNode;
+  return $getLastMatchingCodeNode(anchor, 'previous');
+}
+
+export function $getLastCodeNodeOfLine(
+  anchor: CodeHighlightNode | TabNode | LineBreakNode,
+): CodeHighlightNode | TabNode | LineBreakNode {
+  return $getLastMatchingCodeNode(anchor, 'next');
 }

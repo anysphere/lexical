@@ -6,9 +6,16 @@
  *
  */
 import type {MenuRenderFn, MenuResolution} from './shared/LexicalMenu';
+import type {JSX} from 'react';
 
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
-import {LexicalNode} from 'lexical';
+import {calculateZoomLevel} from '@lexical/utils';
+import {
+  COMMAND_PRIORITY_LOW,
+  CommandListenerPriority,
+  isDOMNode,
+  LexicalNode,
+} from 'lexical';
 import {
   MutableRefObject,
   ReactPortal,
@@ -42,20 +49,26 @@ export type LexicalContextMenuPluginProps<TOption extends MenuOption> = {
   ) => void;
   options: Array<TOption>;
   onClose?: () => void;
+  onWillOpen?: (event: MouseEvent) => void;
   onOpen?: (resolution: MenuResolution) => void;
   menuRenderFn: ContextMenuRenderFn<TOption>;
   anchorClassName?: string;
+  commandPriority?: CommandListenerPriority;
+  parent?: HTMLElement;
 };
 
 const PRE_PORTAL_DIV_SIZE = 1;
 
 export function LexicalContextMenuPlugin<TOption extends MenuOption>({
   options,
+  onWillOpen,
   onClose,
   onOpen,
   onSelectOption,
   menuRenderFn: contextMenuRenderFn,
   anchorClassName,
+  commandPriority = COMMAND_PRIORITY_LOW,
+  parent,
 }: LexicalContextMenuPluginProps<TOption>): JSX.Element | null {
   const [editor] = useLexicalComposerContext();
   const [resolution, setResolution] = useState<MenuResolution | null>(null);
@@ -65,6 +78,7 @@ export function LexicalContextMenuPlugin<TOption extends MenuOption>({
     resolution,
     setResolution,
     anchorClassName,
+    parent,
   );
 
   const closeNodeMenu = useCallback(() => {
@@ -87,17 +101,21 @@ export function LexicalContextMenuPlugin<TOption extends MenuOption>({
   const handleContextMenu = useCallback(
     (event: MouseEvent) => {
       event.preventDefault();
+      if (onWillOpen != null) {
+        onWillOpen(event);
+      }
+      const zoom = calculateZoomLevel(event.target as Element);
       openNodeMenu({
         getRect: () =>
           new DOMRect(
-            event.clientX,
-            event.clientY,
+            event.clientX / zoom,
+            event.clientY / zoom,
             PRE_PORTAL_DIV_SIZE,
             PRE_PORTAL_DIV_SIZE,
           ),
       });
     },
-    [openNodeMenu],
+    [openNodeMenu, onWillOpen],
   );
 
   const handleClick = useCallback(
@@ -106,7 +124,8 @@ export function LexicalContextMenuPlugin<TOption extends MenuOption>({
         resolution !== null &&
         menuRef.current != null &&
         event.target != null &&
-        !menuRef.current.contains(event.target as Node)
+        isDOMNode(event.target) &&
+        !menuRef.current.contains(event.target)
       ) {
         closeNodeMenu();
       }
@@ -128,7 +147,9 @@ export function LexicalContextMenuPlugin<TOption extends MenuOption>({
     return () => document.removeEventListener('click', handleClick);
   }, [editor, handleClick]);
 
-  return resolution === null || editor === null ? null : (
+  return anchorElementRef.current === null ||
+    resolution === null ||
+    editor === null ? null : (
     <LexicalMenu
       close={closeNodeMenu}
       resolution={resolution}
@@ -143,6 +164,7 @@ export function LexicalContextMenuPlugin<TOption extends MenuOption>({
         })
       }
       onSelectOption={onSelectOption}
+      commandPriority={commandPriority}
     />
   );
 }

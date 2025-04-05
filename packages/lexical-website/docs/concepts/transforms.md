@@ -28,11 +28,11 @@ Transforms are executed sequentially before changes are propagated to the DOM an
 
 ![Transforms lifecycle](/img/docs/transforms-lifecycle.svg)
 
-**Beware!**
+:::caution Beware!
 
-In most cases, it is possible to achieve the same or very similar result through an [update listener](/docs/concepts/listeners#registerupdatelistener) followed by an update. This is highly discouraged as it triggers an additional render (the most expensive lifecycle operation).
+While it is possible to achieve the same or very similar result through an [update listener](/docs/concepts/listeners#registerupdatelistener) followed by an update, this is highly discouraged as it triggers an additional render (the most expensive lifecycle operation).
 
-Additionally, each cycle creates a brand new EditorState object which can interfere with plugins like HistoryPlugin (undo-redo) if not handled correctly.
+Additionally, each cycle creates a brand new `EditorState` object which can interfere with plugins like HistoryPlugin (undo-redo) if not handled correctly.
 
 ```js
 editor.registerUpdateListener(() => {
@@ -42,11 +42,53 @@ editor.registerUpdateListener(() => {
 });
 ```
 
+:::
+
+### Dirty Nodes
+
+*Dirty Leaves* (any LexicalNode that is not an ElementNode) and *Dirty Elements*
+are tracked separately to support the transform heuristic.
+
+Internally, there are two states for dirty nodes:
+* Intentionally Dirty nodes (leaves or elements) had `node.getWritable()` or
+  `node.markDirty()` (an alias) called on them. Maintaining the
+  tree-of-doubly-linked-lists structure of a lexical document requires that
+  this Intentionally Dirty state will propagate to immediate siblings and in
+  some cases the parent node.
+* Unintentionally Dirty Element nodes are an ancestor of a
+  dirty node that were not explicitly marked as Intentionally Dirty
+  Only elements can be Unintentionally Dirty, because
+  leaves by definition can not have children.
+
+The reconciler works by starting at the RootNode (which is the ancestor
+of any attached node, and thus always dirty whenever any attached node
+is dirty). Intentionally Dirty nodes have their createDOM and/or updateDOM
+called. Dirty Elements reconcile all of their children. Thus, reconciliation
+stops at the highest node in a subtree that has no dirty nodes (unless it
+is running with a flag to do a full reconciliation which considers all
+nodes as Intentionally Dirty).
+
+:::info
+
+The transform heuristic depends on these internal implementation details to
+find a fixed point where no more transforms are required.
+
+:::
+
+### Transform heuristic
+
+1. We transform leaves first. If transforms generate additional dirty nodes we repeat `step 1`. The reasoning behind this is that marking a leaf as dirty marks all its parent elements as dirty too.
+2. We transform elements.
+    - If element transforms generate additional dirty nodes we repeat `step 1`.
+    - If element transforms only generate additional dirty elements we only repeat `step 2`.
+
+Node will be marked as dirty on any (or most) modifications done to it, it's children or siblings in certain cases.
+
 ## Preconditions
 
 Preconditions are fundamental for transforms to prevent them from running multiple times and ultimately causing an infinite loop.
 
-Transforms are designed to run when nodes have been modified (aka marking nodes dirty). For the most part, transforms only need to run once after the update but the sequential nature of transforms makes it possible to have order bias. Hence, transforms are run over and over until this particular type of Node is no longer marked as dirty by any of the transforms.
+Transforms are designed to run when nodes have been modified (aka Interntionally Dirty). For the most part, transforms only need to run once after the update but the sequential nature of transforms makes it possible to have order bias. Hence, transforms are run over and over until this particular type of Node is no longer marked as intentionally dirty by any of the transforms.
 
 Hence, we have to make sure that the transforms do not mark the node dirty unnecessarily.
 
@@ -83,6 +125,17 @@ editor.addListener('update', ({editorState}) => {
   // text === 're-modified'
 });
 ```
+
+:::info
+
+The transform heuristic considers `RootNode` to be Intentionally Dirty whenever
+any node is dirty, and it ensures that this transform is applied last after all
+other transforms. In this way, you can consider it a "pre-update" listener,
+which occurs before any DOM reconciliation has happened. As with any other
+transform, it may get called multiple times in a given update (especially if
+your RootNode transform makes any node dirty).
+
+:::
 
 ## Transforms on parent nodes
 
@@ -131,7 +184,6 @@ registerLexicalTextEntity<N: TextNode>(
 
 ## Examples
 
-1. [Emoticons (guided example)](https://github.com/facebook/lexical/blob/main/examples/emoticons.md)
-2. [Emojis](https://github.com/facebook/lexical/blob/main/packages/lexical-playground/src/plugins/EmojisPlugin/index.ts)
-3. [AutoLink](https://github.com/facebook/lexical/blob/main/packages/lexical-playground/src/plugins/AutoLinkPlugin/index.tsx)
-4. [HashtagPlugin](https://github.com/facebook/lexical/blob/main/packages/lexical-react/src/LexicalHashtagPlugin.ts)
+1. [Emojis](https://github.com/facebook/lexical/blob/main/packages/lexical-playground/src/plugins/EmojisPlugin/index.ts)
+2. [AutoLink](https://github.com/facebook/lexical/blob/main/packages/lexical-playground/src/plugins/AutoLinkPlugin/index.tsx)
+3. [HashtagPlugin](https://github.com/facebook/lexical/blob/main/packages/lexical-react/src/LexicalHashtagPlugin.ts)

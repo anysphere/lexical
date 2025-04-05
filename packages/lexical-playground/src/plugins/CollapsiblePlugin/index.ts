@@ -16,22 +16,15 @@ import {
 } from '@lexical/utils';
 import {
   $createParagraphNode,
-  $getPreviousSelection,
   $getSelection,
-  $isElementNode,
   $isRangeSelection,
-  $setSelection,
   COMMAND_PRIORITY_LOW,
   createCommand,
-  DELETE_CHARACTER_COMMAND,
-  ElementNode,
   INSERT_PARAGRAPH_COMMAND,
   KEY_ARROW_DOWN_COMMAND,
   KEY_ARROW_LEFT_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
   KEY_ARROW_UP_COMMAND,
-  LexicalNode,
-  NodeKey,
 } from 'lexical';
 import {useEffect} from 'react';
 
@@ -51,8 +44,9 @@ import {
   CollapsibleTitleNode,
 } from './CollapsibleTitleNode';
 
-export const INSERT_COLLAPSIBLE_COMMAND = createCommand<void>();
-export const TOGGLE_COLLAPSIBLE_COMMAND = createCommand<NodeKey>();
+export const INSERT_COLLAPSIBLE_COMMAND = createCommand<void>(
+  'INSERT_COLLAPSIBLE_COMMAND',
+);
 
 export default function CollapsiblePlugin(): null {
   const [editor] = useLexicalComposerContext();
@@ -70,7 +64,7 @@ export default function CollapsiblePlugin(): null {
       );
     }
 
-    const onEscapeUp = () => {
+    const $onEscapeUp = () => {
       const selection = $getSelection();
       if (
         $isRangeSelection(selection) &&
@@ -83,12 +77,11 @@ export default function CollapsiblePlugin(): null {
         );
 
         if ($isCollapsibleContainerNode(container)) {
-          const parent = container.getParent<ElementNode>();
+          const parent = container.getParent();
           if (
             parent !== null &&
-            parent.getFirstChild<LexicalNode>() === container &&
-            selection.anchor.key ===
-              container.getFirstDescendant<LexicalNode>()?.getKey()
+            parent.getFirstChild() === container &&
+            selection.anchor.key === container.getFirstDescendant()?.getKey()
           ) {
             container.insertBefore($createParagraphNode());
           }
@@ -98,7 +91,7 @@ export default function CollapsiblePlugin(): null {
       return false;
     };
 
-    const onEscapeDown = () => {
+    const $onEscapeDown = () => {
       const selection = $getSelection();
       if ($isRangeSelection(selection) && selection.isCollapsed()) {
         const container = $findMatchingParent(
@@ -107,16 +100,19 @@ export default function CollapsiblePlugin(): null {
         );
 
         if ($isCollapsibleContainerNode(container)) {
-          const parent = container.getParent<ElementNode>();
-          if (
-            parent !== null &&
-            parent.getLastChild<LexicalNode>() === container
-          ) {
-            const lastDescendant = container.getLastDescendant<LexicalNode>();
+          const parent = container.getParent();
+          if (parent !== null && parent.getLastChild() === container) {
+            const titleParagraph = container.getFirstDescendant();
+            const contentParagraph = container.getLastDescendant();
+
             if (
-              lastDescendant !== null &&
-              selection.anchor.key === lastDescendant.getKey() &&
-              selection.anchor.offset === lastDescendant.getTextContentSize()
+              (contentParagraph !== null &&
+                selection.anchor.key === contentParagraph.getKey() &&
+                selection.anchor.offset ===
+                  contentParagraph.getTextContentSize()) ||
+              (titleParagraph !== null &&
+                selection.anchor.key === titleParagraph.getKey() &&
+                selection.anchor.offset === titleParagraph.getTextContentSize())
             ) {
               container.insertAfter($createParagraphNode());
             }
@@ -132,9 +128,9 @@ export default function CollapsiblePlugin(): null {
       // "Container > Title + Content" it'll unwrap nodes and convert it back
       // to regular content.
       editor.registerNodeTransform(CollapsibleContentNode, (node) => {
-        const parent = node.getParent<ElementNode>();
+        const parent = node.getParent();
         if (!$isCollapsibleContainerNode(parent)) {
-          const children = node.getChildren<LexicalNode>();
+          const children = node.getChildren();
           for (const child of children) {
             node.insertBefore(child);
           }
@@ -143,17 +139,15 @@ export default function CollapsiblePlugin(): null {
       }),
 
       editor.registerNodeTransform(CollapsibleTitleNode, (node) => {
-        const parent = node.getParent<ElementNode>();
+        const parent = node.getParent();
         if (!$isCollapsibleContainerNode(parent)) {
-          node.replace(
-            $createParagraphNode().append(...node.getChildren<LexicalNode>()),
-          );
+          node.replace($createParagraphNode().append(...node.getChildren()));
           return;
         }
       }),
 
       editor.registerNodeTransform(CollapsibleContainerNode, (node) => {
-        const children = node.getChildren<LexicalNode>();
+        const children = node.getChildren();
         if (
           children.length !== 2 ||
           !$isCollapsibleTitleNode(children[0]) ||
@@ -166,52 +160,19 @@ export default function CollapsiblePlugin(): null {
         }
       }),
 
-      // This handles the case when container is collapsed and we delete its previous sibling
-      // into it, it would cause collapsed content deleted (since it's display: none, and selection
-      // swallows it when deletes single char). Instead we expand container, which is although
-      // not perfect, but avoids bigger problem
-      editor.registerCommand(
-        DELETE_CHARACTER_COMMAND,
-        () => {
-          const selection = $getSelection();
-          if (
-            !$isRangeSelection(selection) ||
-            !selection.isCollapsed() ||
-            selection.anchor.offset !== 0
-          ) {
-            return false;
-          }
-
-          const anchorNode = selection.anchor.getNode();
-          const topLevelElement = anchorNode.getTopLevelElement();
-          if (topLevelElement === null) {
-            return false;
-          }
-
-          const container = topLevelElement.getPreviousSibling<LexicalNode>();
-          if (!$isCollapsibleContainerNode(container) || container.getOpen()) {
-            return false;
-          }
-
-          container.setOpen(true);
-          return true;
-        },
-        COMMAND_PRIORITY_LOW,
-      ),
-
       // When collapsible is the last child pressing down/right arrow will insert paragraph
       // below it to allow adding more content. It's similar what $insertBlockNode
       // (mainly for decorators), except it'll always be possible to continue adding
       // new content even if trailing paragraph is accidentally deleted
       editor.registerCommand(
         KEY_ARROW_DOWN_COMMAND,
-        onEscapeDown,
+        $onEscapeDown,
         COMMAND_PRIORITY_LOW,
       ),
 
       editor.registerCommand(
         KEY_ARROW_RIGHT_COMMAND,
-        onEscapeDown,
+        $onEscapeDown,
         COMMAND_PRIORITY_LOW,
       ),
 
@@ -221,42 +182,35 @@ export default function CollapsiblePlugin(): null {
       // new content even if leading paragraph is accidentally deleted
       editor.registerCommand(
         KEY_ARROW_UP_COMMAND,
-        onEscapeUp,
+        $onEscapeUp,
         COMMAND_PRIORITY_LOW,
       ),
 
       editor.registerCommand(
         KEY_ARROW_LEFT_COMMAND,
-        onEscapeUp,
+        $onEscapeUp,
         COMMAND_PRIORITY_LOW,
       ),
 
-      // Handling CMD+Enter to toggle collapsible element collapsed state
+      // Enter goes from Title to Content rather than a new line inside Title
       editor.registerCommand(
         INSERT_PARAGRAPH_COMMAND,
         () => {
-          // @ts-ignore
-          const windowEvent: KeyboardEvent | undefined = editor._window?.event;
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) {
+            const titleNode = $findMatchingParent(
+              selection.anchor.getNode(),
+              (node) => $isCollapsibleTitleNode(node),
+            );
 
-          if (
-            windowEvent &&
-            (windowEvent.ctrlKey || windowEvent.metaKey) &&
-            windowEvent.key === 'Enter'
-          ) {
-            const selection = $getPreviousSelection();
-            if ($isRangeSelection(selection) && selection.isCollapsed()) {
-              const parent = $findMatchingParent(
-                selection.anchor.getNode(),
-                (node) => $isElementNode(node) && !node.isInline(),
-              );
-
-              if ($isCollapsibleTitleNode(parent)) {
-                const container = parent.getParent<ElementNode>();
-                if ($isCollapsibleContainerNode(container)) {
+            if ($isCollapsibleTitleNode(titleNode)) {
+              const container = titleNode.getParent();
+              if (container && $isCollapsibleContainerNode(container)) {
+                if (!container.getOpen()) {
                   container.toggleOpen();
-                  $setSelection(selection.clone());
-                  return true;
                 }
+                titleNode.getNextSibling()?.selectEnd();
+                return true;
               }
             }
           }
@@ -270,13 +224,14 @@ export default function CollapsiblePlugin(): null {
         () => {
           editor.update(() => {
             const title = $createCollapsibleTitleNode();
+            const paragraph = $createParagraphNode();
             $insertNodeToNearestRoot(
               $createCollapsibleContainerNode(true).append(
-                title,
+                title.append(paragraph),
                 $createCollapsibleContentNode().append($createParagraphNode()),
               ),
             );
-            title.select();
+            paragraph.select();
           });
           return true;
         },

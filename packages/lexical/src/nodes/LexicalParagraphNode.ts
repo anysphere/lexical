@@ -6,27 +6,45 @@
  *
  */
 
-import type { EditorConfig, LexicalEditor } from 'packages/lexical/src/LexicalEditor';
+import type {
+  EditorConfig,
+  KlassConstructor,
+  LexicalEditor,
+  Spread,
+} from '../LexicalEditor';
 import type {
   DOMConversionMap,
   DOMConversionOutput,
   DOMExportOutput,
   LexicalNode,
-} from 'packages/lexical/src/LexicalNode';
+} from '../LexicalNode';
+import type { RangeSelection } from '../LexicalSelection';
 import type {
   ElementFormatType,
   SerializedElementNode,
 } from './LexicalElementNode';
-import type { RangeSelection } from 'packages/lexical/src';
 
-import { $applyNodeReplacement, getCachedClassNameArray } from 'packages/lexical/src/LexicalUtils';
-import {ElementNode} from './LexicalElementNode';
-import {$isTextNode} from './LexicalTextNode';
+import {
+  $applyNodeReplacement,
+  getCachedClassNameArray,
+  isHTMLElement,
+  setNodeIndentFromDOM,
+} from '../LexicalUtils';
+import { ElementNode } from './LexicalElementNode';
+import { $isTextNode } from './LexicalTextNode';
 
-export type SerializedParagraphNode = SerializedElementNode;
+export type SerializedParagraphNode = Spread<
+  {
+    textFormat: number;
+    textStyle: string;
+  },
+  SerializedElementNode
+>;
 
 /** @noInheritDoc */
 export class ParagraphNode extends ElementNode {
+  ['constructor']!: KlassConstructor<typeof ParagraphNode>;
+
   static getType(): string {
     return 'paragraph';
   }
@@ -57,32 +75,22 @@ export class ParagraphNode extends ElementNode {
   static importDOM(): DOMConversionMap | null {
     return {
       p: (node: Node) => ({
-        conversion: convertParagraphElement,
+        conversion: $convertParagraphElement,
         priority: 0,
       }),
     };
   }
 
   exportDOM(editor: LexicalEditor): DOMExportOutput {
-    const {element} = super.exportDOM(editor);
+    const { element } = super.exportDOM(editor);
 
-    if (element && this.isEmpty()) {
-      element.append(document.createElement('br'));
-    }
-    if (element) {
+    if (isHTMLElement(element)) {
+      if (this.isEmpty()) {
+        element.append(document.createElement('br'));
+      }
+
       const formatType = this.getFormatType();
       element.style.textAlign = formatType;
-
-      const direction = this.getDirection();
-      if (direction) {
-        element.dir = direction;
-      }
-      const indent = this.getIndent();
-      if (indent > 0) {
-        // padding-inline-start is not widely supported in email HTML, but
-        // Lexical Reconciler uses padding-inline-start. Using text-indent instead.
-        element.style.textIndent = `${indent * 20}px`;
-      }
     }
 
     return {
@@ -91,27 +99,31 @@ export class ParagraphNode extends ElementNode {
   }
 
   static importJSON(serializedNode: SerializedParagraphNode): ParagraphNode {
-    const node = $createParagraphNode();
-    node.setFormat(serializedNode.format);
-    node.setIndent(serializedNode.indent);
-    node.setDirection(serializedNode.direction);
-    return node;
+    return $createParagraphNode().updateFromJSON(serializedNode);
   }
 
-  exportJSON(): SerializedElementNode {
+  exportJSON(): SerializedParagraphNode {
     return {
       ...super.exportJSON(),
-      type: 'paragraph',
-      version: 1,
+      // These are included explicitly for backwards compatibility
+      textFormat: this.getTextFormat(),
+      textStyle: this.getTextStyle(),
     };
   }
 
   // Mutation
 
-  insertNewAfter(_: RangeSelection, restoreSelection: boolean): ParagraphNode {
+  insertNewAfter(
+    rangeSelection: RangeSelection,
+    restoreSelection: boolean,
+  ): ParagraphNode {
     const newElement = $createParagraphNode();
+    newElement.setTextFormat(rangeSelection.format);
+    newElement.setTextStyle(rangeSelection.style);
     const direction = this.getDirection();
     newElement.setDirection(direction);
+    newElement.setFormat(this.getFormatType());
+    newElement.setStyle(this.getStyle());
     this.insertAfter(newElement, restoreSelection);
     return newElement;
   }
@@ -141,16 +153,13 @@ export class ParagraphNode extends ElementNode {
   }
 }
 
-function convertParagraphElement(element: HTMLElement): DOMConversionOutput {
+function $convertParagraphElement(element: HTMLElement): DOMConversionOutput {
   const node = $createParagraphNode();
   if (element.style) {
     node.setFormat(element.style.textAlign as ElementFormatType);
-    const indent = parseInt(element.style.textIndent, 10) / 20;
-    if (indent > 0) {
-      node.setIndent(indent);
-    }
+    setNodeIndentFromDOM(element, node);
   }
-  return {node};
+  return { node };
 }
 
 export function $createParagraphNode(): ParagraphNode {

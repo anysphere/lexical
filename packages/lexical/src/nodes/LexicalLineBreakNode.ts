@@ -6,6 +6,7 @@
  *
  */
 
+import type { KlassConstructor } from '../LexicalEditor';
 import type {
   DOMConversionMap,
   DOMConversionOutput,
@@ -13,14 +14,18 @@ import type {
   SerializedLexicalNode,
 } from 'packages/lexical/src/LexicalNode';
 
-import { DOM_TEXT_TYPE } from 'packages/lexical/src/LexicalConstants';
-import { LexicalNode } from 'packages/lexical/src/LexicalNode';
-import { $applyNodeReplacement } from 'packages/lexical/src/LexicalUtils';
+import { LexicalNode } from '../LexicalNode';
+import {
+  $applyNodeReplacement,
+  isBlockDomNode,
+  isDOMTextNode,
+} from '../LexicalUtils';
 
 export type SerializedLineBreakNode = SerializedLexicalNode;
 
 /** @noInheritDoc */
 export class LineBreakNode extends LexicalNode {
+  ['constructor']!: KlassConstructor<typeof LineBreakNode>;
   static getType(): string {
     return 'linebreak';
   }
@@ -45,32 +50,18 @@ export class LineBreakNode extends LexicalNode {
     return false;
   }
 
+  isInline(): true {
+    return true;
+  }
+
   static importDOM(): DOMConversionMap | null {
     return {
       br: (node: Node) => {
-        const parentElement = node.parentElement;
-        // If the <br> is the only child, then skip including it
-        let firstChild;
-        let lastChild;
-        if (
-          parentElement !== null &&
-          ((firstChild = parentElement.firstChild) === node ||
-            ((firstChild as Text).nextSibling === node &&
-              (firstChild as Text).nodeType === DOM_TEXT_TYPE &&
-              ((firstChild as Text).textContent || '').match(
-                /^[\s|\r?\n|\t]+$/,
-              ) !== null)) &&
-          ((lastChild = parentElement.lastChild) === node ||
-            ((lastChild as Text).previousSibling === node &&
-              (lastChild as Text).nodeType === DOM_TEXT_TYPE &&
-              ((lastChild as Text).textContent || '').match(
-                /^[\s|\r?\n|\t]+$/,
-              ) !== null))
-        ) {
+        if (isOnlyChildInBlockNode(node) || isLastChildInBlockNode(node)) {
           return null;
         }
         return {
-          conversion: convertLineBreakElement,
+          conversion: $convertLineBreakElement,
           priority: 0,
         };
       },
@@ -80,19 +71,12 @@ export class LineBreakNode extends LexicalNode {
   static importJSON(
     serializedLineBreakNode: SerializedLineBreakNode,
   ): LineBreakNode {
-    return $createLineBreakNode();
-  }
-
-  exportJSON(): SerializedLexicalNode {
-    return {
-      type: 'linebreak',
-      version: 1,
-    };
+    return $createLineBreakNode().updateFromJSON(serializedLineBreakNode);
   }
 }
 
-function convertLineBreakElement(node: Node): DOMConversionOutput {
-  return {node: $createLineBreakNode()};
+function $convertLineBreakElement(node: Node): DOMConversionOutput {
+  return { node: $createLineBreakNode() };
 }
 
 export function $createLineBreakNode(): LineBreakNode {
@@ -103,4 +87,53 @@ export function $isLineBreakNode(
   node: LexicalNode | null | undefined,
 ): node is LineBreakNode {
   return node instanceof LineBreakNode;
+}
+
+function isOnlyChildInBlockNode(node: Node): boolean {
+  const parentElement = node.parentElement;
+  if (parentElement !== null && isBlockDomNode(parentElement)) {
+    const firstChild = parentElement.firstChild!;
+    if (
+      firstChild === node ||
+      (firstChild.nextSibling === node && isWhitespaceDomTextNode(firstChild))
+    ) {
+      const lastChild = parentElement.lastChild!;
+      if (
+        lastChild === node ||
+        (lastChild.previousSibling === node &&
+          isWhitespaceDomTextNode(lastChild))
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isLastChildInBlockNode(node: Node): boolean {
+  const parentElement = node.parentElement;
+  if (parentElement !== null && isBlockDomNode(parentElement)) {
+    // check if node is first child, because only childs dont count
+    const firstChild = parentElement.firstChild!;
+    if (
+      firstChild === node ||
+      (firstChild.nextSibling === node && isWhitespaceDomTextNode(firstChild))
+    ) {
+      return false;
+    }
+
+    // check if its last child
+    const lastChild = parentElement.lastChild!;
+    if (
+      lastChild === node ||
+      (lastChild.previousSibling === node && isWhitespaceDomTextNode(lastChild))
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isWhitespaceDomTextNode(node: Node): boolean {
+  return isDOMTextNode(node) && /^( |\t|\r?\n)+$/.test(node.textContent || '');
 }

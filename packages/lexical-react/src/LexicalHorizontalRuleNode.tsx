@@ -10,29 +10,30 @@ import type {
   DOMConversionMap,
   DOMConversionOutput,
   DOMExportOutput,
+  EditorConfig,
   LexicalCommand,
   LexicalNode,
   NodeKey,
   SerializedLexicalNode,
 } from 'lexical';
+import type {JSX} from 'react';
 
 import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
 import {useLexicalNodeSelection} from '@lexical/react/useLexicalNodeSelection';
-import {mergeRegister} from '@lexical/utils';
+import {
+  addClassNamesToElement,
+  mergeRegister,
+  removeClassNamesFromElement,
+} from '@lexical/utils';
 import {
   $applyNodeReplacement,
-  $getNodeByKey,
-  $getSelection,
-  $isNodeSelection,
   CLICK_COMMAND,
   COMMAND_PRIORITY_LOW,
   createCommand,
   DecoratorNode,
-  KEY_BACKSPACE_COMMAND,
-  KEY_DELETE_COMMAND,
 } from 'lexical';
 import * as React from 'react';
-import {useCallback, useEffect} from 'react';
+import {useEffect} from 'react';
 
 export type SerializedHorizontalRuleNode = SerializedLexicalNode;
 
@@ -43,22 +44,6 @@ function HorizontalRuleComponent({nodeKey}: {nodeKey: NodeKey}) {
   const [editor] = useLexicalComposerContext();
   const [isSelected, setSelected, clearSelection] =
     useLexicalNodeSelection(nodeKey);
-
-  const onDelete = useCallback(
-    (payload: KeyboardEvent) => {
-      if (isSelected && $isNodeSelection($getSelection())) {
-        const event: KeyboardEvent = payload;
-        event.preventDefault();
-        const node = $getNodeByKey(nodeKey);
-        if ($isHorizontalRuleNode(node)) {
-          node.remove();
-        }
-        setSelected(false);
-      }
-      return false;
-    },
-    [isSelected, nodeKey, setSelected],
-  );
 
   useEffect(() => {
     return mergeRegister(
@@ -79,23 +64,19 @@ function HorizontalRuleComponent({nodeKey}: {nodeKey: NodeKey}) {
         },
         COMMAND_PRIORITY_LOW,
       ),
-      editor.registerCommand(
-        KEY_DELETE_COMMAND,
-        onDelete,
-        COMMAND_PRIORITY_LOW,
-      ),
-      editor.registerCommand(
-        KEY_BACKSPACE_COMMAND,
-        onDelete,
-        COMMAND_PRIORITY_LOW,
-      ),
     );
-  }, [clearSelection, editor, isSelected, nodeKey, onDelete, setSelected]);
+  }, [clearSelection, editor, isSelected, nodeKey, setSelected]);
 
   useEffect(() => {
     const hrElem = editor.getElementByKey(nodeKey);
+    const isSelectedClassName = editor._config.theme.hrSelected ?? 'selected';
+
     if (hrElem !== null) {
-      hrElem.className = isSelected ? 'selected' : '';
+      if (isSelected) {
+        addClassNamesToElement(hrElem, isSelectedClassName);
+      } else {
+        removeClassNamesFromElement(hrElem, isSelectedClassName);
+      }
     }
   }, [editor, isSelected, nodeKey]);
 
@@ -114,22 +95,15 @@ export class HorizontalRuleNode extends DecoratorNode<JSX.Element> {
   static importJSON(
     serializedNode: SerializedHorizontalRuleNode,
   ): HorizontalRuleNode {
-    return $createHorizontalRuleNode();
+    return $createHorizontalRuleNode().updateFromJSON(serializedNode);
   }
 
   static importDOM(): DOMConversionMap | null {
     return {
       hr: () => ({
-        conversion: convertHorizontalRuleElement,
+        conversion: $convertHorizontalRuleElement,
         priority: 0,
       }),
-    };
-  }
-
-  exportJSON(): SerializedLexicalNode {
-    return {
-      type: 'horizontalrule',
-      version: 1,
     };
   }
 
@@ -137,8 +111,10 @@ export class HorizontalRuleNode extends DecoratorNode<JSX.Element> {
     return {element: document.createElement('hr')};
   }
 
-  createDOM(): HTMLElement {
-    return document.createElement('hr');
+  createDOM(config: EditorConfig): HTMLElement {
+    const element = document.createElement('hr');
+    addClassNamesToElement(element, config.theme.hr);
+    return element;
   }
 
   getTextContent(): string {
@@ -158,7 +134,7 @@ export class HorizontalRuleNode extends DecoratorNode<JSX.Element> {
   }
 }
 
-function convertHorizontalRuleElement(): DOMConversionOutput {
+function $convertHorizontalRuleElement(): DOMConversionOutput {
   return {node: $createHorizontalRuleNode()};
 }
 
